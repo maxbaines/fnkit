@@ -156,6 +156,7 @@ async function main() {
       case 'p':
         const publishSuccess = await publish({
           tag: options.tag as string,
+          target: options.target as string,
           registry: options.registry as string,
           push: options.push as boolean,
         })

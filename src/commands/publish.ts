@@ -1,14 +1,14 @@
-// Publish command - build Docker container
+// Publish command - build deployable container using Google Cloud Buildpacks
 
 import { existsSync } from 'fs'
-import { readFile, writeFile } from 'fs/promises'
-import { join, basename, resolve } from 'path'
+import { basename, resolve } from 'path'
 import logger from '../utils/logger'
+import * as pack from '../utils/pack'
 import * as docker from '../utils/docker'
-import { getAllRuntimes, type Runtime } from '../runtimes'
 
 export interface PublishOptions {
   tag?: string
+  target?: string
   registry?: string
   push?: boolean
 }
@@ -19,7 +19,17 @@ export async function publish(options: PublishOptions = {}): Promise<boolean> {
 
   logger.title(`Publishing: ${projectName}`)
 
-  // Check Docker availability
+  // Check pack CLI availability
+  if (!(await pack.isPackAvailable())) {
+    logger.error('pack CLI is not installed')
+    logger.dim(pack.PACK_INSTALL_HINT)
+    return false
+  }
+
+  const packVersion = await pack.getPackVersion()
+  logger.success(`pack CLI: ${packVersion}`)
+
+  // Check Docker availability (required by pack)
   if (!(await docker.isDockerAvailable())) {
     logger.error('Docker is not installed')
     logger.dim('Install Docker from https://docker.com')
@@ -34,35 +44,22 @@ export async function publish(options: PublishOptions = {}): Promise<boolean> {
 
   logger.success('Docker is available')
 
-  // Detect runtime
-  const runtime = await detectRuntime(projectDir)
-  if (!runtime) {
-    logger.error('Could not detect runtime')
-    logger.info('Make sure you are in a function project directory')
-    return false
-  }
-
-  logger.success(`Detected runtime: ${runtime.displayName}`)
-
-  // Check/create Dockerfile
-  const dockerfilePath = join(projectDir, 'Dockerfile')
-  if (!existsSync(dockerfilePath)) {
-    logger.step('Creating Dockerfile...')
-    const dockerfile = runtime.generateDockerfile(projectName, 'helloWorld')
-    await writeFile(dockerfilePath, dockerfile)
-    logger.success('Created Dockerfile')
-  }
-
   // Determine tag
   const tag = options.tag || `${projectName}:latest`
   const fullTag = options.registry ? `${options.registry}/${tag}` : tag
 
-  // Build image
-  logger.step(`Building image: ${fullTag}`)
-  const buildSuccess = await docker.build(projectDir, { tag: fullTag })
+  // Detect function target from common patterns
+  const target = options.target || detectFunctionTarget(projectDir)
+
+  // Build with buildpacks
+  const buildSuccess = await pack.build(projectDir, {
+    tag: fullTag,
+    target,
+    signatureType: 'http',
+  })
 
   if (!buildSuccess) {
-    logger.error('Docker build failed')
+    logger.error('Build failed')
     return false
   }
 
@@ -85,33 +82,30 @@ export async function publish(options: PublishOptions = {}): Promise<boolean> {
   logger.info('Run your container:')
   logger.dim(`  docker run -p 8080:8080 ${fullTag}`)
   logger.newline()
+  logger.info('Test it:')
+  logger.dim('  curl http://localhost:8080')
+  logger.newline()
 
   return true
 }
 
-async function detectRuntime(projectDir: string): Promise<Runtime | null> {
-  const runtimes = getAllRuntimes()
+function detectFunctionTarget(projectDir: string): string {
+  // Try to detect function name from common patterns
+  // Default to 'helloWorld' which is the common example name
 
-  for (const runtime of runtimes) {
-    for (const pattern of runtime.filePatterns) {
-      // Handle glob patterns simply
-      if (pattern.includes('*')) {
-        const { readdir } = await import('fs/promises')
-        const files = await readdir(projectDir)
-        const ext = pattern.replace('*', '')
-        if (files.some((f) => f.endsWith(ext))) {
-          return runtime
-        }
-      } else {
-        const filePath = join(projectDir, pattern)
-        if (existsSync(filePath)) {
-          return runtime
-        }
+  // Check for package.json with main field
+  const packageJsonPath = `${projectDir}/package.json`
+  if (existsSync(packageJsonPath)) {
+    try {
+      const pkg = require(packageJsonPath)
+      if (pkg.main) {
+        // Extract function name from main if it looks like a function export
+        return 'helloWorld'
       }
-    }
+    } catch {}
   }
 
-  return null
+  return 'helloWorld'
 }
 
 export default publish

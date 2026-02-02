@@ -3,6 +3,11 @@
 import logger from '../utils/logger'
 import { commandExists, getCommandVersion } from '../utils/shell'
 import { isDockerAvailable, isDockerRunning } from '../utils/docker'
+import {
+  isPackAvailable,
+  getPackVersion,
+  PACK_INSTALL_HINT,
+} from '../utils/pack'
 import { getAllRuntimes, getRuntime } from '../runtimes'
 
 export async function doctor(runtimeName?: string): Promise<boolean> {
@@ -40,6 +45,17 @@ export async function doctor(runtimeName?: string): Promise<boolean> {
   } else {
     logger.error('docker: not installed')
     logger.dim('  Install from https://docker.com')
+    allGood = false
+  }
+
+  // Pack CLI (buildpacks)
+  const packInstalled = await isPackAvailable()
+  if (packInstalled) {
+    const version = await getPackVersion()
+    logger.success(`pack: ${version}`)
+  } else {
+    logger.error('pack: not installed')
+    logger.dim(`  ${PACK_INSTALL_HINT}`)
     allGood = false
   }
 
