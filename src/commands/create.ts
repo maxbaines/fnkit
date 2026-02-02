@@ -1,14 +1,16 @@
 // Create command - scaffold a new function project
 
 import { existsSync } from 'fs'
-import { mkdir, rm, readdir, rename, writeFile } from 'fs/promises'
-import { join, resolve } from 'path'
+import { mkdir, writeFile } from 'fs/promises'
+import { join, resolve, dirname } from 'path'
 import logger from '../utils/logger'
 import * as git from '../utils/git'
+import { execStream } from '../utils/shell'
 import { getRuntime, getRuntimeNames } from '../runtimes'
 
 export interface CreateOptions {
   remote?: string
+  skipInstall?: boolean
 }
 
 export async function create(
@@ -46,36 +48,28 @@ export async function create(
     }
   }
 
-  // Clone the functions framework repo to a temp location outside target
-  const tempDir = join(resolve(process.cwd()), `.faas-temp-${Date.now()}`)
-  const cloneSuccess = await git.clone(runtime.repo, tempDir, { depth: 1 })
+  // Generate project from template
+  logger.step('Generating project files...')
+  const template = runtime.generateProject(projectName)
 
-  if (!cloneSuccess) {
-    logger.error('Failed to clone repository')
-    await rm(tempDir, { recursive: true, force: true }).catch(() => {})
-    return false
-  }
+  // Create target directory
+  await mkdir(targetDir, { recursive: true })
 
-  try {
-    // Find example/template directory
-    const exampleDir = await findExampleDir(tempDir, runtime.name)
+  // Write all template files
+  for (const [filename, content] of Object.entries(template.files)) {
+    const filePath = join(targetDir, filename)
+    const fileDir = dirname(filePath)
 
-    if (exampleDir) {
-      // Copy example to target directory
-      const { cp } = await import('fs/promises')
-      await cp(exampleDir, targetDir, { recursive: true })
-    } else {
-      // No example found, copy the whole repo
-      const { cp } = await import('fs/promises')
-      await cp(tempDir, targetDir, { recursive: true })
-      await git.removeGitHistory(targetDir)
+    // Create subdirectories if needed
+    if (fileDir !== targetDir) {
+      await mkdir(fileDir, { recursive: true })
     }
-  } finally {
-    // Always clean up temp directory
-    await rm(tempDir, { recursive: true, force: true }).catch(() => {})
+
+    await writeFile(filePath, content)
+    logger.dim(`  Created ${filename}`)
   }
 
-  // Initialize fresh git repo
+  // Initialize git repo
   logger.step('Initializing git repository...')
   await git.init(targetDir)
 
@@ -90,58 +84,107 @@ export async function create(
   const dockerfile = runtime.generateDockerfile(projectName, 'helloWorld')
   await writeFile(join(targetDir, 'Dockerfile'), dockerfile)
 
+  // Create .gitignore
+  logger.step('Creating .gitignore...')
+  const gitignore = generateGitignore(runtime.name)
+  await writeFile(join(targetDir, '.gitignore'), gitignore)
+
+  // Run post-create commands (e.g., npm install)
+  if (
+    !options.skipInstall &&
+    template.postCreate &&
+    template.postCreate.length > 0
+  ) {
+    logger.step('Installing dependencies...')
+    for (const cmd of template.postCreate) {
+      const [command, ...args] = cmd.split(' ')
+      logger.dim(`  Running: ${cmd}`)
+      const exitCode = await execStream(command, args, { cwd: targetDir })
+      if (exitCode !== 0) {
+        logger.warn(`Command "${cmd}" exited with code ${exitCode}`)
+      }
+    }
+  }
+
   logger.newline()
   logger.success(`Created ${runtime.displayName} function in ./${projectName}`)
   logger.newline()
   logger.info('Next steps:')
   logger.dim(`  cd ${projectName}`)
-  if (runtime.name === 'nodejs') {
-    logger.dim('  npm install')
-  } else if (runtime.name === 'python') {
-    logger.dim('  pip install -r requirements.txt')
-  } else if (runtime.name === 'go') {
-    logger.dim('  go mod tidy')
-  } else if (runtime.name === 'dotnet') {
-    logger.dim('  dotnet restore')
-  } else if (runtime.name === 'ruby') {
-    logger.dim('  bundle install')
-  } else if (runtime.name === 'php') {
-    logger.dim('  composer install')
-  } else if (runtime.name === 'dart') {
-    logger.dim('  dart pub get')
-  } else if (runtime.name === 'java') {
-    logger.dim('  mvn install')
-  }
   logger.dim('  faas run')
+  logger.newline()
+  logger.dim(`Quickstart guide: ${runtime.quickstartUrl}`)
   logger.newline()
 
   return true
 }
 
-async function findExampleDir(
-  repoDir: string,
-  runtimeName: string,
-): Promise<string | null> {
-  // Common example directory patterns
-  const patterns = [
-    'examples/hello',
-    'examples/helloworld',
-    'examples/hello-world',
-    'example',
-    'examples',
-    'sample',
-    'samples/hello',
-    'quickstart',
-  ]
+function generateGitignore(runtimeName: string): string {
+  const common = `# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
 
-  for (const pattern of patterns) {
-    const dir = join(repoDir, pattern)
-    if (existsSync(dir)) {
-      return dir
-    }
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile.local
+`
+
+  const runtimeSpecific: Record<string, string> = {
+    nodejs: `# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+.env
+`,
+    python: `# Python
+__pycache__/
+*.py[cod]
+.env
+venv/
+.venv/
+`,
+    go: `# Go
+vendor/
+*.exe
+`,
+    java: `# Java
+target/
+*.class
+*.jar
+`,
+    ruby: `# Ruby
+vendor/bundle/
+.bundle/
+Gemfile.lock
+`,
+    dotnet: `# .NET
+bin/
+obj/
+*.user
+`,
+    php: `# PHP
+vendor/
+composer.lock
+`,
+    dart: `# Dart
+.dart_tool/
+.packages
+build/
+pubspec.lock
+`,
+    cpp: `# C++
+build/
+*.o
+*.a
+`,
   }
 
-  return null
+  return common + (runtimeSpecific[runtimeName] || '')
 }
 
 export default create
