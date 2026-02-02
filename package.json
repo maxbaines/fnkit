@@ -1,0 +1,35 @@
+{
+  "name": "faas",
+  "version": "1.0.0",
+  "description": "Functions as a Service CLI - scaffold and deploy serverless functions",
+  "module": "src/index.ts",
+  "type": "module",
+  "bin": {
+    "faas": "./dist/faas"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build ./src/index.ts --compile --outfile ./dist/faas",
+    "build:all": "bun run build:macos && bun run build:linux && bun run build:windows",
+    "build:macos": "bun build ./src/index.ts --compile --target=bun-darwin-arm64 --outfile ./dist/faas-macos-arm64",
+    "build:linux": "bun build ./src/index.ts --compile --target=bun-linux-x64 --outfile ./dist/faas-linux-x64",
+    "build:windows": "bun build ./src/index.ts --compile --target=bun-windows-x64 --outfile ./dist/faas-windows-x64.exe",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "faas",
+    "functions",
+    "serverless",
+    "google-cloud",
+    "functions-framework",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT"
+}
