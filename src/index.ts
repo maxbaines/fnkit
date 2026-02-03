@@ -10,7 +10,7 @@ import { global, uninstall } from './commands/global'
 import { getRuntimeNames } from './runtimes'
 import logger from './utils/logger'
 
-const VERSION = '0.6.4'
+const VERSION = '0.6.5'
 
 function showHelp() {
   console.log(`
