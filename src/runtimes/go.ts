@@ -23,6 +23,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/main.go
 
 FROM gcr.io/distroless/static-debian11
 COPY --from=builder /app/server /server
+ENV FUNCTION_TARGET=HelloWorld
+EXPOSE 8080
 CMD ["/server"]
 `,
   template: (projectName: string) => ({
