@@ -24,16 +24,15 @@ export const java = createRuntime({
   ],
   filePatterns: ['pom.xml', 'build.gradle'],
   runCommand: ['mvn', 'function:run'],
-  dockerfile: `FROM maven:3.9-eclipse-temurin-17 AS builder
+  dockerfile: `FROM maven:3.9-eclipse-temurin-17
 WORKDIR /app
 COPY pom.xml .
 RUN mvn dependency:go-offline
 COPY src ./src
 RUN mvn package -DskipTests
+EXPOSE 8080
+CMD ["mvn", "function:run", "-Drun.port=8080"]
 
-FROM eclipse-temurin:17-jre
-COPY --from=builder /app/target/*.jar /app.jar
-CMD ["java", "-jar", "/app.jar"]
 `,
   template: (projectName: string) => ({
     files: {
