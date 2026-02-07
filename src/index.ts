@@ -11,7 +11,7 @@ import { containers } from './commands/containers'
 import { getRuntimeNames } from './runtimes'
 import logger from './utils/logger'
 
-const VERSION = '0.6.6'
+const VERSION = '0.6.7'
 
 function showHelp() {
   console.log(`
