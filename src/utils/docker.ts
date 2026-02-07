@@ -58,3 +58,78 @@ export async function imageExists(tag: string): Promise<boolean> {
   const result = await exec('docker', ['image', 'inspect', tag])
   return result.success
 }
+
+export interface ContainerInfo {
+  id: string
+  name: string
+  status: string
+  state: string
+  image: string
+  created: string
+  ports: string
+  labels: Record<string, string>
+}
+
+export async function listContainers(
+  labelFilter?: string,
+): Promise<ContainerInfo[]> {
+  const args = [
+    'ps',
+    '-a',
+    '--format',
+    '{{.ID}}\t{{.Names}}\t{{.Status}}\t{{.State}}\t{{.Image}}\t{{.CreatedAt}}\t{{.Ports}}',
+  ]
+
+  if (labelFilter) {
+    args.push('--filter', `label=${labelFilter}`)
+  }
+
+  const result = await exec('docker', args)
+  if (!result.success || !result.stdout.trim()) {
+    return []
+  }
+
+  const lines = result.stdout.trim().split('\n')
+  const containers: ContainerInfo[] = []
+
+  for (const line of lines) {
+    const [id, name, status, state, image, created, ports] = line.split('\t')
+    if (id) {
+      // Get labels for this container
+      const labels = await getContainerLabels(id)
+      containers.push({
+        id,
+        name,
+        status,
+        state,
+        image,
+        created,
+        ports: ports || '',
+        labels,
+      })
+    }
+  }
+
+  return containers
+}
+
+export async function getContainerLabels(
+  containerId: string,
+): Promise<Record<string, string>> {
+  const result = await exec('docker', [
+    'inspect',
+    '--format',
+    '{{json .Config.Labels}}',
+    containerId,
+  ])
+
+  if (!result.success || !result.stdout.trim()) {
+    return {}
+  }
+
+  try {
+    return JSON.parse(result.stdout.trim()) || {}
+  } catch {
+    return {}
+  }
+}
