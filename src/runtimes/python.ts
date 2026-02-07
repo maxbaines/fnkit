@@ -17,6 +17,7 @@ export const python = createRuntime({
   runCommand: ['functions-framework', '--target=hello', '--debug'],
   devCommand: ['functions-framework', '--target=hello', '--debug'],
   dockerfile: `FROM python:3.11-slim
+LABEL faas.fn="true"
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

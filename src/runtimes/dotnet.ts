@@ -16,6 +16,7 @@ export const dotnet = createRuntime({
   filePatterns: ['*.csproj', '*.fsproj'],
   runCommand: ['dotnet', 'run'],
   dockerfile: `FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+LABEL faas.fn="true"
 WORKDIR /src
 COPY *.csproj ./
 RUN dotnet restore

@@ -37,6 +37,7 @@ export const cpp = createRuntime({
 # Recommended: Use 'pack build' with Google Cloud Buildpacks instead
 
 FROM ubuntu:22.04 AS build
+LABEL faas.fn="true"
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \\

@@ -25,6 +25,7 @@ export const java = createRuntime({
   filePatterns: ['pom.xml', 'build.gradle'],
   runCommand: ['mvn', 'function:run'],
   dockerfile: `FROM maven:3.9-eclipse-temurin-17
+LABEL faas.fn="true"
 WORKDIR /app
 COPY pom.xml .
 RUN mvn dependency:go-offline
