@@ -8,53 +8,79 @@ import { run } from './commands/run'
 import { init } from './commands/init'
 import { global, uninstall } from './commands/global'
 import { containers } from './commands/containers'
+import { gateway } from './commands/gateway'
 import { getRuntimeNames } from './runtimes'
 import logger from './utils/logger'
 
-const VERSION = '0.6.7'
+const VERSION = '0.7.0'
+
+// Canonical runtime names only
+const CANONICAL_RUNTIMES = [
+  'node',
+  'python',
+  'go',
+  'java',
+  'ruby',
+  'dotnet',
+  'php',
+  'dart',
+  'cpp',
+]
 
 function showHelp() {
   console.log(`
 faas - Functions as a Service CLI
 
 Usage:
-  faas <command> [options]
-  faas <runtime> <name>     Create a new function (shorthand)
+  faas <command> [subcommand] [options]
+  faas <runtime> <name>           Quick create (shorthand)
 
 Commands:
-  create, c <runtime> <name>   Create a new function project
-  init                         Initialize existing project as function
-  run, dev                     Run function locally
-  publish, p                   Build Docker container
-  containers, ls               List deployed faas containers
-  doctor [runtime]             Check runtime dependencies
-  global                       Install faas globally (requires sudo)
-  uninstall                    Remove global installation
-  help                         Show this help message
-  version                      Show version
+  new <runtime> <name>            Create a new function
+  init                            Initialize existing directory
+  dev                             Run function locally
+
+  container ls                    List deployed containers
+  container logs <name>           View container logs
+  container stop <name>           Stop a container
+
+  gateway init                    Create gateway project
+  gateway build                   Build gateway image
+  gateway start                   Start gateway
+  gateway stop                    Stop gateway
+
+  image build                     Build Docker image
+  image push                      Push to registry
+
+  doctor [runtime]                Check dependencies
+  install                         Install faas globally
+  uninstall                       Uninstall faas globally
 
 Runtimes:
-  ${getRuntimeNames().join(', ')}
+  ${CANONICAL_RUNTIMES.join(', ')}
 
 Examples:
-  faas nodejs hello            Create Node.js function named "hello"
-  faas create dotnet api       Create .NET function named "api"
-  faas c python myfunction     Create Python function
-  faas init                    Initialize current directory
-  faas run                     Run function locally
-  faas publish                 Build Docker container
-  faas publish --tag myapp:v1  Build with custom tag
-  faas doctor                  Check all runtimes
-  faas doctor nodejs           Check Node.js specifically
+  faas node hello                 Create Node.js function
+  faas new python api             Create Python function
+  faas dev                        Run locally
+  faas dev --port 3000            Run on specific port
+  faas image build                Build Docker image
+  faas image build --tag v1       Build with custom tag
+  faas image push --registry gcr  Push to registry
+  faas container ls               List containers
+  faas gateway start --token xyz  Start gateway with auth
+  faas doctor node                Check Node.js dependencies
 
 Options:
-  --remote, -r <url>           Set git remote for create
-  --tag, -t <tag>              Docker image tag for publish
-  --registry <registry>        Docker registry for publish
-  --push                       Push image after build
-  --target <function>          Function target for run
-  --port <port>                Port for run
-  --runtime <runtime>          Runtime for init
+  --remote, -r <url>              Git remote for new/init
+  --tag, -t <tag>                 Docker image tag
+  --registry <registry>           Docker registry
+  --push                          Push after build
+  --target <function>             Function target
+  --port, -p <port>               Port for dev server
+  --runtime <runtime>             Runtime for init
+  --token <token>                 Auth token for gateway
+  --all                           Show all containers
 `)
 }
 
@@ -122,20 +148,20 @@ async function main() {
         showVersion()
         break
 
-      case 'create':
-      case 'c':
+      // ─────────────────────────────────────────────────────────────────
+      // Function creation & development
+      // ─────────────────────────────────────────────────────────────────
+
+      case 'new':
         if (positionalArgs.length < 2) {
-          logger.error('Usage: faas create <runtime> <name>')
+          logger.error('Usage: faas new <runtime> <name>')
+          logger.info(`Runtimes: ${CANONICAL_RUNTIMES.join(', ')}`)
           process.exit(1)
         }
-        const createSuccess = await create(
-          positionalArgs[0],
-          positionalArgs[1],
-          {
-            remote: options.remote as string,
-          },
-        )
-        process.exit(createSuccess ? 0 : 1)
+        const newSuccess = await create(positionalArgs[0], positionalArgs[1], {
+          remote: options.remote as string,
+        })
+        process.exit(newSuccess ? 0 : 1)
         break
 
       case 'init':
@@ -145,42 +171,145 @@ async function main() {
         process.exit(initSuccess ? 0 : 1)
         break
 
-      case 'run':
       case 'dev':
-        const runSuccess = await run({
+        const devSuccess = await run({
           target: options.target as string,
           port: options.port ? parseInt(options.port as string) : undefined,
         })
-        process.exit(runSuccess ? 0 : 1)
+        process.exit(devSuccess ? 0 : 1)
         break
 
-      case 'publish':
-      case 'p':
-        const publishSuccess = await publish({
-          tag: options.tag as string,
-          target: options.target as string,
-          registry: options.registry as string,
-          push: options.push as boolean,
-        })
-        process.exit(publishSuccess ? 0 : 1)
+      // ─────────────────────────────────────────────────────────────────
+      // Container management: faas container <subcommand>
+      // ─────────────────────────────────────────────────────────────────
+
+      case 'container':
+        const containerSubcmd = positionalArgs[0]
+        if (!containerSubcmd) {
+          logger.error('Usage: faas container <ls|logs|stop> [name]')
+          process.exit(1)
+        }
+
+        switch (containerSubcmd) {
+          case 'ls':
+          case 'list':
+            const lsSuccess = await containers({
+              all: options.all as boolean,
+            })
+            process.exit(lsSuccess ? 0 : 1)
+            break
+
+          case 'logs':
+            if (!positionalArgs[1]) {
+              logger.error('Usage: faas container logs <name>')
+              process.exit(1)
+            }
+            const { exec } = await import('./utils/shell')
+            const logsResult = await exec('docker', [
+              'logs',
+              '-f',
+              positionalArgs[1],
+            ])
+            process.exit(logsResult.success ? 0 : 1)
+            break
+
+          case 'stop':
+            if (!positionalArgs[1]) {
+              logger.error('Usage: faas container stop <name>')
+              process.exit(1)
+            }
+            const { exec: execStop } = await import('./utils/shell')
+            const stopResult = await execStop('docker', [
+              'stop',
+              positionalArgs[1],
+            ])
+            if (stopResult.success) {
+              logger.success(`Stopped container: ${positionalArgs[1]}`)
+            } else {
+              logger.error(`Failed to stop container: ${positionalArgs[1]}`)
+            }
+            process.exit(stopResult.success ? 0 : 1)
+            break
+
+          default:
+            logger.error(`Unknown container command: ${containerSubcmd}`)
+            logger.info('Available: ls, logs, stop')
+            process.exit(1)
+        }
         break
+
+      // ─────────────────────────────────────────────────────────────────
+      // Gateway management: faas gateway <subcommand>
+      // ─────────────────────────────────────────────────────────────────
+
+      case 'gateway':
+        const gatewaySubcmd = positionalArgs[0]
+        if (!gatewaySubcmd) {
+          logger.error('Usage: faas gateway <init|build|start|stop>')
+          logger.info('  init   - Create gateway project files')
+          logger.info('  build  - Build the gateway Docker image')
+          logger.info('  start  - Start the gateway container')
+          logger.info('  stop   - Stop the gateway container')
+          process.exit(1)
+        }
+        const gatewaySuccess = await gateway(gatewaySubcmd, {
+          output: options.output as string,
+          token: options.token as string,
+        })
+        process.exit(gatewaySuccess ? 0 : 1)
+        break
+
+      // ─────────────────────────────────────────────────────────────────
+      // Image management: faas image <subcommand>
+      // ─────────────────────────────────────────────────────────────────
+
+      case 'image':
+        const imageSubcmd = positionalArgs[0]
+        if (!imageSubcmd) {
+          logger.error('Usage: faas image <build|push>')
+          process.exit(1)
+        }
+
+        switch (imageSubcmd) {
+          case 'build':
+            const buildSuccess = await publish({
+              tag: options.tag as string,
+              target: options.target as string,
+              registry: options.registry as string,
+              push: false,
+            })
+            process.exit(buildSuccess ? 0 : 1)
+            break
+
+          case 'push':
+            const pushSuccess = await publish({
+              tag: options.tag as string,
+              target: options.target as string,
+              registry: options.registry as string,
+              push: true,
+            })
+            process.exit(pushSuccess ? 0 : 1)
+            break
+
+          default:
+            logger.error(`Unknown image command: ${imageSubcmd}`)
+            logger.info('Available: build, push')
+            process.exit(1)
+        }
+        break
+
+      // ─────────────────────────────────────────────────────────────────
+      // Utilities
+      // ─────────────────────────────────────────────────────────────────
 
       case 'doctor':
         const doctorSuccess = await doctor(positionalArgs[0])
         process.exit(doctorSuccess ? 0 : 1)
         break
 
-      case 'containers':
-      case 'ls':
-        const containersSuccess = await containers({
-          all: options.all as boolean,
-        })
-        process.exit(containersSuccess ? 0 : 1)
-        break
-
-      case 'global':
-        const globalSuccess = await global()
-        process.exit(globalSuccess ? 0 : 1)
+      case 'install':
+        const installSuccess = await global()
+        process.exit(installSuccess ? 0 : 1)
         break
 
       case 'uninstall':
@@ -188,10 +317,13 @@ async function main() {
         process.exit(uninstallSuccess ? 0 : 1)
         break
 
+      // ─────────────────────────────────────────────────────────────────
+      // Shorthand: faas <runtime> <name> → faas new <runtime> <name>
+      // ─────────────────────────────────────────────────────────────────
+
       default:
-        // Check if command is a runtime name (shorthand for create)
-        const runtimeNames = getRuntimeNames()
-        if (runtimeNames.includes(command.toLowerCase())) {
+        // Check if command is a canonical runtime name (shorthand for new)
+        if (CANONICAL_RUNTIMES.includes(command.toLowerCase())) {
           if (positionalArgs.length < 1) {
             logger.error(`Usage: faas ${command} <name>`)
             process.exit(1)

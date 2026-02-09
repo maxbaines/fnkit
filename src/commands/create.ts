@@ -89,6 +89,11 @@ export async function create(
   const gitignore = generateGitignore(runtime.name)
   await writeFile(join(targetDir, '.gitignore'), gitignore)
 
+  // Create docker-compose.yml for gateway integration
+  logger.step('Creating docker-compose.yml...')
+  const dockerCompose = generateDockerCompose(projectName)
+  await writeFile(join(targetDir, 'docker-compose.yml'), dockerCompose)
+
   // Run post-create commands (e.g., npm install)
   if (
     !options.skipInstall &&
@@ -203,6 +208,46 @@ build/
   }
 
   return common + (runtimeSpecific[runtimeName] || '')
+}
+
+function generateDockerCompose(projectName: string): string {
+  return `# Docker Compose for FaaS function with gateway integration
+# Requires: docker network create faas-network
+# Requires: faas-gateway running (faas gateway init && faas gateway build && faas gateway start)
+
+version: '3.8'
+
+services:
+  ${projectName}:
+    build: .
+    container_name: ${projectName}
+    networks:
+      - faas-network
+    depends_on:
+      faas-gateway:
+        condition: service_started
+    restart: unless-stopped
+
+  # Uncomment to include gateway in this compose file
+  # faas-gateway:
+  #   image: faas-gateway:latest
+  #   container_name: faas-gateway
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     - FAAS_AUTH_TOKEN=\${FAAS_AUTH_TOKEN:-}
+  #   networks:
+  #     - faas-network
+
+networks:
+  faas-network:
+    name: faas-network
+    external: true
+
+# Usage:
+#   docker-compose up -d
+#   curl -H "Authorization: Bearer <token>" http://localhost:8080/${projectName}
+`
 }
 
 export default create

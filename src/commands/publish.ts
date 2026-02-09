@@ -79,10 +79,16 @@ export async function publish(options: PublishOptions = {}): Promise<boolean> {
   logger.newline()
   logger.success('Publish complete!')
   logger.newline()
-  logger.info('Run your container:')
-  logger.dim(`  docker run -p 8080:8080 ${fullTag}`)
+  logger.info('Run with gateway (recommended):')
+  logger.dim(
+    `  docker run -d --name ${projectName} --network faas-network ${fullTag}`,
+  )
+  logger.dim(
+    `  curl -H "Authorization: Bearer <token>" http://localhost:8080/${projectName}`,
+  )
   logger.newline()
-  logger.info('Test it:')
+  logger.info('Or run standalone:')
+  logger.dim(`  docker run -p 8080:8080 ${fullTag}`)
   logger.dim('  curl http://localhost:8080')
   logger.newline()
 
