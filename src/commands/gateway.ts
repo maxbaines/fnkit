@@ -14,7 +14,7 @@ const FAAS_NETWORK = 'faas-network'
 // Uses envsubst to inject FAAS_AUTH_TOKEN at container startup
 const NGINX_CONF_TEMPLATE = `# FaaS Gateway - Nginx configuration with token authentication
 # Routes requests to function containers on the faas-network
-# Token is injected via envsubst at container startup
+# FAAS_AUTH_TOKEN and FAAS_AUTH_ENABLED are injected via envsubst at container startup
 
 worker_processes auto;
 error_log /var/log/nginx/error.log warn;
@@ -47,10 +47,10 @@ http {
         "Bearer \${FAAS_AUTH_TOKEN}"    1;
     }
 
-    # Map to check if auth is disabled (empty token = open mode)
-    map \${FAAS_AUTH_TOKEN} $auth_required {
-        default 1;
-        ""      0;
+    # FAAS_AUTH_ENABLED is set to "0" or "1" by start.sh (never empty)
+    map \${FAAS_AUTH_ENABLED} $auth_required {
+        default 0;
+        "1"     1;
     }
 
     server {
@@ -75,12 +75,14 @@ http {
             set $container_name $1;
             set $container_path $2;
 
+            # default_type must be at location level (not inside if)
+            default_type application/json;
+
             # Check authentication (if token is configured)
-            set $auth_check "\${auth_required}:\${auth_valid}";
-            
+            set $auth_check "$auth_required:$auth_valid";
+
             # If auth is required (1) and token is invalid (0), return 401
             if ($auth_check = "1:0") {
-                default_type application/json;
                 return 401 '{"error": "Unauthorized - Invalid or missing Bearer token"}';
             }
 
@@ -135,16 +137,18 @@ CMD ["/start.sh"]
 const START_SCRIPT = `#!/bin/sh
 set -e
 
-# Substitute environment variables into nginx config
-# Only substitute FAAS_AUTH_TOKEN to avoid breaking nginx variables like $host
-envsubst '\${FAAS_AUTH_TOKEN}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
-
-# Log auth mode
+# Compute auth enabled flag (always "0" or "1", never empty)
 if [ -z "$FAAS_AUTH_TOKEN" ]; then
+    export FAAS_AUTH_ENABLED=0
     echo "FaaS Gateway starting in OPEN mode (no authentication)"
 else
+    export FAAS_AUTH_ENABLED=1
     echo "FaaS Gateway starting with token authentication enabled"
 fi
+
+# Substitute environment variables into nginx config
+# Only substitute these two to avoid breaking nginx variables like $host, $remote_addr etc.
+envsubst '\${FAAS_AUTH_TOKEN} \${FAAS_AUTH_ENABLED}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
 
 # Start nginx
 exec nginx -g 'daemon off;'
