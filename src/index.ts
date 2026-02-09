@@ -12,7 +12,7 @@ import { gateway } from './commands/gateway'
 import { getRuntimeNames } from './runtimes'
 import logger from './utils/logger'
 
-const VERSION = '0.7.0'
+const VERSION = '0.6.8'
 
 // Canonical runtime names only
 const CANONICAL_RUNTIMES = [
