@@ -180,6 +180,91 @@ curl -H "Authorization: Bearer your-secret-token" \
 3. Ensure all function containers are on the same Docker network (`faas-network`)
 4. Point your domain at the gateway
 
+### Deploy to Remote Server (Git Push to Deploy)
+
+Deploy your function containers to a remote Linux server by pushing to Git. Supports Forgejo (default) and GitHub.
+
+**Architecture:**
+
+```
+git push → Forgejo/GitHub Actions → Build image → Deploy container → faas-network → Gateway
+```
+
+#### One-Time: Set Up the Forgejo Runner
+
+The runner executes CI workflows and needs Docker socket access to build/deploy containers on the host.
+
+```bash
+# Generate runner setup files
+faas deploy runner
+# → Creates faas-runner/ with docker-compose.yml and instructions
+```
+
+Then on your server:
+
+1. **Enable Actions** in Forgejo: Site Administration → Actions → Enable
+2. **Get a registration token**: Site Administration → Actions → Runners → Create new runner
+3. **Register the runner**:
+   ```bash
+   cd faas-runner
+   docker compose run --rm forgejo-runner \
+     forgejo-runner register \
+     --instance https://your-forgejo-url \
+     --token YOUR_TOKEN \
+     --name faas-runner \
+     --labels docker:docker://node:20 \
+     --no-interactive
+   ```
+4. **Start the runner**:
+   ```bash
+   docker compose up -d
+   ```
+
+#### Per Function: Set Up Deploy Workflow
+
+```bash
+# Inside your function project
+cd my-function
+
+# Forgejo (default)
+faas deploy init
+
+# Or GitHub Actions
+faas deploy init --provider github
+```
+
+This generates a workflow file that builds and deploys on every push to `main`.
+
+**Forgejo** (`.forgejo/workflows/deploy.yml`):
+
+- Builds the Docker image directly on the host via the runner
+- No registry needed — the runner has Docker socket access
+- Stops the old container and starts the new one on `faas-network`
+
+**GitHub** (`.github/workflows/deploy.yml`):
+
+- Builds and pushes to GitHub Container Registry (ghcr.io)
+- SSHs to your server, pulls the image, and deploys
+- Requires secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`
+
+#### Full Example
+
+```bash
+# Create a function
+faas node my-api
+cd my-api
+
+# Set up deployment
+faas deploy init
+
+# Push to deploy
+git remote add origin http://forgejo.example.com/user/my-api.git
+git add . && git commit -m "init" && git push -u origin main
+
+# Function is now live!
+curl -H "Authorization: Bearer <token>" http://gateway.example.com/my-api
+```
+
 ### Initialize Existing Project
 
 ```bash
@@ -204,6 +289,8 @@ faas init --runtime python
 | `gateway build`        | Build gateway image           |
 | `gateway start`        | Start gateway                 |
 | `gateway stop`         | Stop gateway                  |
+| `deploy init`          | Generate deploy workflow      |
+| `deploy runner`        | Generate Forgejo runner setup |
 | `image build`          | Build Docker image            |
 | `image push`           | Push to registry              |
 | `doctor [runtime]`     | Check dependencies            |
@@ -212,17 +299,18 @@ faas init --runtime python
 
 ## Options
 
-| Option                  | Short | Description             |
-| ----------------------- | ----- | ----------------------- |
-| `--remote <url>`        | `-r`  | Git remote for new/init |
-| `--tag <tag>`           | `-t`  | Docker image tag        |
-| `--registry <registry>` |       | Docker registry         |
-| `--push`                |       | Push after build        |
-| `--target <function>`   |       | Function target         |
-| `--port <port>`         | `-p`  | Port for dev server     |
-| `--runtime <runtime>`   |       | Runtime for init        |
-| `--token <token>`       |       | Auth token for gateway  |
-| `--all`                 |       | Show all containers     |
+| Option                  | Short | Description                       |
+| ----------------------- | ----- | --------------------------------- |
+| `--remote <url>`        | `-r`  | Git remote for new/init           |
+| `--tag <tag>`           | `-t`  | Docker image tag                  |
+| `--registry <registry>` |       | Docker registry                   |
+| `--push`                |       | Push after build                  |
+| `--target <function>`   |       | Function target                   |
+| `--port <port>`         | `-p`  | Port for dev server               |
+| `--runtime <runtime>`   |       | Runtime for init                  |
+| `--token <token>`       |       | Auth token for gateway            |
+| `--provider <provider>` |       | Deploy provider (forgejo\|github) |
+| `--all`                 |       | Show all containers               |
 
 ## Development
 
@@ -254,6 +342,7 @@ faas/
 │   │   ├── publish.ts        # Docker build
 │   │   ├── containers.ts     # Container management
 │   │   ├── gateway.ts        # Gateway management
+│   │   ├── deploy.ts         # Deploy workflows (Forgejo/GitHub)
 │   │   └── doctor.ts         # Runtime checks
 │   ├── runtimes/
 │   │   ├── base.ts           # Runtime interface

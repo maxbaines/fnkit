@@ -9,6 +9,7 @@ import { init } from './commands/init'
 import { global, uninstall } from './commands/global'
 import { containers } from './commands/containers'
 import { gateway } from './commands/gateway'
+import { deploy } from './commands/deploy'
 import { getRuntimeNames } from './runtimes'
 import logger from './utils/logger'
 
@@ -49,6 +50,9 @@ Commands:
   gateway start                   Start gateway
   gateway stop                    Stop gateway
 
+  deploy init                     Generate deploy workflow
+  deploy runner                   Generate Forgejo runner setup
+
   image build                     Build Docker image
   image push                      Push to registry
 
@@ -69,6 +73,9 @@ Examples:
   faas image push --registry gcr  Push to registry
   faas container ls               List containers
   faas gateway start --token xyz  Start gateway with auth
+  faas deploy init                Setup Forgejo deploy workflow
+  faas deploy init --provider github  Setup GitHub Actions workflow
+  faas deploy runner              Setup Forgejo runner
   faas doctor node                Check Node.js dependencies
 
 Options:
@@ -80,6 +87,7 @@ Options:
   --port, -p <port>               Port for dev server
   --runtime <runtime>             Runtime for init
   --token <token>                 Auth token for gateway
+  --provider <provider>           Deploy provider (forgejo|github)
   --all                           Show all containers
 `)
 }
@@ -257,6 +265,25 @@ async function main() {
           token: options.token as string,
         })
         process.exit(gatewaySuccess ? 0 : 1)
+        break
+
+      // ─────────────────────────────────────────────────────────────────
+      // Deploy management: faas deploy <subcommand>
+      // ─────────────────────────────────────────────────────────────────
+
+      case 'deploy':
+        const deploySubcmd = positionalArgs[0]
+        if (!deploySubcmd) {
+          logger.error('Usage: faas deploy <init|runner>')
+          logger.info('  init   - Generate deploy workflow (Forgejo or GitHub)')
+          logger.info('  runner - Generate Forgejo runner setup')
+          process.exit(1)
+        }
+        const deploySuccess = await deploy(deploySubcmd, {
+          provider: options.provider as 'forgejo' | 'github' | undefined,
+          output: options.output as string,
+        })
+        process.exit(deploySuccess ? 0 : 1)
         break
 
       // ─────────────────────────────────────────────────────────────────
