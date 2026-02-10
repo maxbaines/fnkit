@@ -1,6 +1,6 @@
 {
   "name": "faas",
-  "version": "0.6.9",
+  "version": "0.6.10",
   "description": "Functions as a Service CLI - scaffold and deploy serverless functions",
   "module": "src/index.ts",
   "type": "module",
