@@ -12,6 +12,12 @@ const RUNNER_DIR = 'faas-runner'
 
 const RUNNER_DOCKER_COMPOSE = `# Forgejo Actions Runner for FaaS deployments
 # Requires Docker socket access to build and deploy function containers
+#
+# Environment variables (set in Coolify or .env):
+#   FORGEJO_INSTANCE       - Forgejo instance URL (e.g. https://git.example.com)
+#   FORGEJO_RUNNER_TOKEN   - Runner registration token from Forgejo admin
+#   FORGEJO_RUNNER_NAME    - Runner name (default: faas-runner)
+#   FORGEJO_RUNNER_LABELS  - Runner labels (default: docker:docker://node:20)
 
 services:
   forgejo-runner:
@@ -23,6 +29,27 @@ services:
       - runner-data:/data
     environment:
       - DOCKER_HOST=unix:///var/run/docker.sock
+      - FORGEJO_INSTANCE=\${FORGEJO_INSTANCE}
+      - FORGEJO_RUNNER_TOKEN=\${FORGEJO_RUNNER_TOKEN}
+      - FORGEJO_RUNNER_NAME=\${FORGEJO_RUNNER_NAME:-faas-runner}
+      - FORGEJO_RUNNER_LABELS=\${FORGEJO_RUNNER_LABELS:-docker:docker://node:20}
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        cd /data
+        if [ ! -f .runner ]; then
+          echo "First run — registering runner with \\$FORGEJO_INSTANCE..."
+          forgejo-runner register \\
+            --instance "\\$FORGEJO_INSTANCE" \\
+            --token "\\$FORGEJO_RUNNER_TOKEN" \\
+            --name "\\$FORGEJO_RUNNER_NAME" \\
+            --labels "\\$FORGEJO_RUNNER_LABELS" \\
+            --no-interactive
+        else
+          echo "Runner already registered, starting daemon..."
+        fi
+        forgejo-runner daemon
 
 volumes:
   runner-data:
@@ -30,51 +57,52 @@ volumes:
 
 const RUNNER_README = `# FaaS Forgejo Runner
 
-Forgejo Actions runner for deploying FaaS function containers.
+Forgejo Actions runner for deploying FaaS function containers. Auto-registers on first startup — just set the environment variables and deploy.
 
-## Setup
+## Deploy on Coolify
 
-### 1. Enable Actions in Forgejo
+1. **Enable Actions in Forgejo** — Site Administration → Actions → Enable (or add env var \`FORGEJO__actions__ENABLED=true\` to your Forgejo service)
 
-Go to **Site Administration → Actions** and enable Actions.
+2. **Get a registration token** — Site Administration → Actions → Runners → Create new runner
 
-Or add this environment variable to your Forgejo service:
+3. **Deploy this repo as a Docker Compose service in Coolify** and set these environment variables:
 
-\`\`\`
-FORGEJO__actions__ENABLED=true
-\`\`\`
+| Variable | Required | Description |
+|----------|----------|-------------|
+| \`FORGEJO_INSTANCE\` | ✅ | Your Forgejo URL (e.g. \`https://git.example.com\`) |
+| \`FORGEJO_RUNNER_TOKEN\` | ✅ | Registration token from step 2 |
+| \`FORGEJO_RUNNER_NAME\` | | Runner name (default: \`faas-runner\`) |
+| \`FORGEJO_RUNNER_LABELS\` | | Runner labels (default: \`docker:docker://node:20\`) |
 
-### 2. Get a Runner Registration Token
+4. **Deploy** — Coolify starts the container, which auto-registers and starts the daemon
 
-Go to **Site Administration → Actions → Runners → Create new runner** and copy the token.
+5. **Verify** — Check Site Administration → Actions → Runners — the runner should appear as online
 
-### 3. Register the Runner
+## How It Works
 
-\`\`\`bash
-docker compose run --rm forgejo-runner \\
-  forgejo-runner register \\
-  --instance https://your-forgejo-url \\
-  --token YOUR_TOKEN \\
-  --name faas-runner \\
-  --labels docker:docker://node:20 \\
-  --no-interactive
-\`\`\`
+On first startup, the runner checks if it's already registered (\`.runner\` file in the data volume). If not, it registers with Forgejo using the environment variables. On subsequent restarts it skips registration and goes straight to the daemon.
 
-### 4. Start the Runner
+The runner mounts the host Docker socket (\`/var/run/docker.sock\`), so workflow steps that run \`docker build\` and \`docker run\` operate directly on the host Docker — the same Docker where your gateway and function containers live.
+
+## Manual Setup (without Coolify)
 
 \`\`\`bash
+# Set environment variables
+export FORGEJO_INSTANCE=https://git.example.com
+export FORGEJO_RUNNER_TOKEN=your-token-here
+
+# Start
 docker compose up -d
+
+# Check logs
+docker logs forgejo-runner
 \`\`\`
-
-### 5. Verify
-
-Check **Site Administration → Actions → Runners** — the runner should appear as online.
 
 ## Notes
 
-- The runner mounts the host Docker socket, so it can build images and manage containers directly
-- Function containers are deployed to the \`faas-network\` Docker network
 - The runner label \`docker\` is used in workflow files (\`runs-on: docker\`)
+- Function containers are deployed to the \`faas-network\` Docker network
+- Registration persists in the \`runner-data\` volume — survives restarts and redeployments
 `
 
 // ─────────────────────────────────────────────────────────────────
@@ -338,27 +366,27 @@ export async function deployRunner(
   console.log('')
   console.log('   1. Enable Actions in Forgejo:')
   console.log('      Site Administration → Actions → Enable')
-  console.log('')
-  console.log('      Or add env var to Forgejo service:')
-  logger.dim('      FORGEJO__actions__ENABLED=true')
+  console.log(
+    '      (or add FORGEJO__actions__ENABLED=true to Forgejo service)',
+  )
   console.log('')
   console.log('   2. Get a runner registration token:')
   console.log(
     '      Site Administration → Actions → Runners → Create new runner',
   )
   console.log('')
-  console.log(`   3. Register the runner (run from ${outputDir}/):`)
-  logger.dim(`      cd ${outputDir}`)
-  logger.dim('      docker compose run --rm forgejo-runner \\')
-  logger.dim('        forgejo-runner register \\')
-  logger.dim('        --instance https://your-forgejo-url \\')
-  logger.dim('        --token YOUR_REGISTRATION_TOKEN \\')
-  logger.dim('        --name faas-runner \\')
-  logger.dim('        --labels docker:docker://node:20 \\')
-  logger.dim('        --no-interactive')
+  console.log('   3. Set environment variables (in Coolify or .env):')
+  logger.dim('      FORGEJO_INSTANCE=https://your-forgejo-url')
+  logger.dim('      FORGEJO_RUNNER_TOKEN=your-registration-token')
   console.log('')
-  console.log('   4. Start the runner:')
-  logger.dim(`      docker compose up -d`)
+  console.log('   4. Deploy:')
+  console.log(
+    '      • Coolify: Deploy as Docker Compose service, set env vars above',
+  )
+  console.log('      • Manual:  docker compose up -d')
+  console.log('')
+  console.log('   The runner auto-registers on first startup and persists')
+  console.log('   registration in the runner-data volume.')
   console.log('')
   console.log('   5. Verify in Forgejo:')
   console.log('      Site Administration → Actions → Runners')
