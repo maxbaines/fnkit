@@ -204,18 +204,12 @@ Then on your server:
 
 1. **Enable Actions** in Forgejo: Site Administration → Actions → Enable
 2. **Get a registration token**: Site Administration → Actions → Runners → Create new runner
-3. **Register the runner**:
-   ```bash
-   cd faas-runner
-   docker compose run --rm forgejo-runner \
-     forgejo-runner register \
-     --instance https://your-forgejo-url \
-     --token YOUR_TOKEN \
-     --name faas-runner \
-     --labels docker:docker://node:20 \
-     --no-interactive
+3. **Set environment variables** (in Coolify or `.env`):
    ```
-4. **Start the runner**:
+   FORGEJO_INSTANCE=https://your-forgejo-url
+   FORGEJO_RUNNER_TOKEN=your-registration-token
+   ```
+4. **Deploy** — the runner auto-registers on first startup:
    ```bash
    docker compose up -d
    ```
