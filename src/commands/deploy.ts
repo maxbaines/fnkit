@@ -22,6 +22,7 @@ const RUNNER_DOCKER_COMPOSE = `# Forgejo Actions Runner for FaaS deployments
 services:
   forgejo-runner:
     image: code.forgejo.org/forgejo/runner:6
+    user: "0:0"
     container_name: forgejo-runner
     restart: unless-stopped
     volumes:
@@ -39,12 +40,12 @@ services:
       - |
         cd /data
         if [ ! -f .runner ]; then
-          echo "First run — registering runner with \\$FORGEJO_INSTANCE..."
+          echo "First run — registering runner with $$FORGEJO_INSTANCE..."
           forgejo-runner register \\
-            --instance "\\$FORGEJO_INSTANCE" \\
-            --token "\\$FORGEJO_RUNNER_TOKEN" \\
-            --name "\\$FORGEJO_RUNNER_NAME" \\
-            --labels "\\$FORGEJO_RUNNER_LABELS" \\
+            --instance "$$FORGEJO_INSTANCE" \\
+            --token "$$FORGEJO_RUNNER_TOKEN" \\
+            --name "$$FORGEJO_RUNNER_NAME" \\
+            --labels "$$FORGEJO_RUNNER_LABELS" \\
             --no-interactive
         else
           echo "Runner already registered, starting daemon..."
