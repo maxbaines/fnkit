@@ -17,7 +17,7 @@ const RUNNER_DOCKER_COMPOSE = `# Forgejo Actions Runner for FaaS deployments
 #   FORGEJO_INSTANCE       - Forgejo instance URL (e.g. https://git.example.com)
 #   FORGEJO_RUNNER_TOKEN   - Runner registration token from Forgejo admin
 #   FORGEJO_RUNNER_NAME    - Runner name (default: faas-runner)
-#   FORGEJO_RUNNER_LABELS  - Runner labels (default: docker:host)
+#   FORGEJO_RUNNER_LABELS  - Runner labels (default: ubuntu-latest:host)
 
 services:
   forgejo-runner:
@@ -33,7 +33,7 @@ services:
       - FORGEJO_INSTANCE=\${FORGEJO_INSTANCE}
       - FORGEJO_RUNNER_TOKEN=\${FORGEJO_RUNNER_TOKEN}
       - FORGEJO_RUNNER_NAME=\${FORGEJO_RUNNER_NAME:-faas-runner}
-      - FORGEJO_RUNNER_LABELS=\${FORGEJO_RUNNER_LABELS:-docker:host}
+      - FORGEJO_RUNNER_LABELS=\${FORGEJO_RUNNER_LABELS:-ubuntu-latest:host}
     entrypoint: /bin/sh
     command:
       - -c
@@ -76,7 +76,7 @@ Forgejo Actions runner for deploying FaaS function containers. Auto-registers on
 | \`FORGEJO_INSTANCE\` | ✅ | Your Forgejo URL (e.g. \`https://git.example.com\`) |
 | \`FORGEJO_RUNNER_TOKEN\` | ✅ | Registration token from step 2 |
 | \`FORGEJO_RUNNER_NAME\` | | Runner name (default: \`faas-runner\`) |
-| \`FORGEJO_RUNNER_LABELS\` | | Runner labels (default: \`docker:host\`) |
+| \`FORGEJO_RUNNER_LABELS\` | | Runner labels (default: \`ubuntu-latest:host\`) |
 
 4. **Deploy** — Coolify starts the container, which auto-registers and starts the daemon
 
@@ -104,7 +104,7 @@ docker logs forgejo-runner
 
 ## Notes
 
-- The runner label \`docker\` is used in workflow files (\`runs-on: docker\`)
+- The runner label \`ubuntu-latest\` is used in workflow files (\`runs-on: ubuntu-latest\`)
 - Function containers are deployed to the \`faas-network\` Docker network
 - Registration persists in the \`runner-data\` volume — survives restarts and redeployments
 `
@@ -124,7 +124,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: docker
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
