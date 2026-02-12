@@ -38,8 +38,8 @@ services:
     command:
       - -c
       - |
-        # Install Docker CLI and git (needed for host-mode builds)
-        apk add --no-cache docker-cli git
+        # Install Docker CLI, git, and Node.js (needed for host-mode builds + JS actions)
+        apk add --no-cache docker-cli git nodejs
 
         cd /data
         if [ ! -f .runner ]; then
