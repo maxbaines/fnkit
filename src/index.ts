@@ -13,7 +13,7 @@ import { deploy } from './commands/deploy'
 import { getRuntimeNames } from './runtimes'
 import logger from './utils/logger'
 
-const VERSION = '0.6.11'
+const VERSION = '0.6.12'
 
 // Canonical runtime names only
 const CANONICAL_RUNTIMES = [
