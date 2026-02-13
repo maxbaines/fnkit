@@ -54,7 +54,10 @@ http {
     }
 
     server {
+        listen 80;
+        listen [::]:80;
         listen 8080;
+        listen [::]:8080;
         server_name _;
 
         # Health check endpoint (no auth required)
