@@ -13,7 +13,7 @@ import { deploy } from './commands/deploy'
 import { proxy } from './commands/proxy'
 import logger from './utils/logger'
 
-const VERSION = '0.7.1'
+const VERSION = '0.7.2'
 
 // Canonical runtime names only
 const CANONICAL_RUNTIMES = [
