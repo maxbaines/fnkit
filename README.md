@@ -109,7 +109,7 @@ faas container stop my-api      # Stop a container
 
 ### API Gateway — `faas gateway`
 
-Centralized token authentication and routing for all function containers via nginx.
+Centralized token authentication and routing for all function containers via nginx, with a built-in Bun-based orchestrator for multi-function pipelines.
 
 ```bash
 faas gateway init               # Create gateway project files
@@ -133,6 +133,75 @@ curl -H "Authorization: Bearer your-token" http://localhost:8080/my-function/api
 
 # Health check (no auth)
 curl http://localhost:8080/health
+```
+
+#### Orchestrator — `faas gateway orchestrate`
+
+Define multi-function pipelines that call several functions in a single request — either **sequentially** (chaining output → input) or in **parallel** (fan-out, merge results). Pipeline configs are stored in an S3-compatible bucket (MinIO, Garage, AWS S3).
+
+```bash
+# Configure S3/MinIO bucket for pipeline storage
+faas gateway orchestrate init --s3-bucket faas-pipelines --s3-endpoint http://localhost:9000
+
+# Add a sequential pipeline (each step gets previous output)
+faas gateway orchestrate add process-order \
+  --steps validate-order,charge-payment,send-email \
+  --mode sequential
+
+# Add a parallel pipeline (all steps called simultaneously, results merged)
+faas gateway orchestrate add enrich-user \
+  --steps get-profile,get-preferences,get-history \
+  --mode parallel
+
+# List & manage pipelines
+faas gateway orchestrate ls
+faas gateway orchestrate remove process-order
+```
+
+**Calling pipelines:**
+
+```bash
+# Sequential: validate-order → charge-payment → send-email (chained)
+curl -H "Authorization: Bearer token" \
+  -d '{"orderId": 123}' \
+  http://localhost:8080/orchestrate/process-order
+
+# Parallel: all 3 called simultaneously, results merged
+curl -H "Authorization: Bearer token" \
+  -d '{"userId": 456}' \
+  http://localhost:8080/orchestrate/enrich-user
+# → { "get-profile": {...}, "get-preferences": {...}, "get-history": {...} }
+```
+
+**Pipeline config format** (stored as `<name>.json` in S3):
+
+```json
+{
+  "mode": "sequential",
+  "steps": ["validate-order", "charge-payment", "send-email"]
+}
+```
+
+**Starting the gateway with S3 credentials:**
+
+```bash
+faas gateway start --token secret \
+  --s3-bucket faas-pipelines \
+  --s3-endpoint http://minio:9000 \
+  --s3-access-key minioadmin \
+  --s3-secret-key minioadmin
+```
+
+**Architecture:**
+
+```
+Request → nginx (port 8080)
+  ├── /orchestrate/<name>  → Bun orchestrator (port 3000 internal)
+  │                           ├── fetches <name>.json from S3
+  │                           ├── calls functions sequentially or in parallel
+  │                           └── returns combined result
+  ├── /health              → 200 OK
+  └── /<name>/*            → proxy to container (existing behavior)
 ```
 
 ### Reverse Proxy — `faas proxy`
@@ -227,39 +296,43 @@ faas uninstall                  # Remove global installation
 
 Run `faas <command>` with no subcommand to see detailed help for any group.
 
-| Command                      | Description                   |
-| ---------------------------- | ----------------------------- |
-| **Create & Develop**         |                               |
-| `faas new <runtime> <name>`  | Create a new function project |
-| `faas <runtime> <name>`      | Shorthand for `new`           |
-| `faas init`                  | Initialize existing directory |
-| `faas dev`                   | Run function locally          |
-| **Containers**               |                               |
-| `faas container ls`          | List deployed containers      |
-| `faas container logs <name>` | View container logs           |
-| `faas container stop <name>` | Stop a container              |
-| **Gateway**                  |                               |
-| `faas gateway init`          | Create gateway project        |
-| `faas gateway build`         | Build gateway image           |
-| `faas gateway start`         | Start gateway                 |
-| `faas gateway stop`          | Stop gateway                  |
-| **Proxy**                    |                               |
-| `faas proxy init`            | Create Caddy reverse proxy    |
-| `faas proxy add <domain>`    | Add domain route              |
-| `faas proxy remove <domain>` | Remove domain route           |
-| `faas proxy ls`              | List configured domains       |
-| **Deploy**                   |                               |
-| `faas deploy setup`          | Guided deploy pipeline setup  |
-| `faas deploy init`           | Generate deploy workflow      |
-| `faas deploy runner`         | Generate Forgejo runner setup |
-| `faas deploy status`         | Check deployment status       |
-| **Images**                   |                               |
-| `faas image build`           | Build Docker image            |
-| `faas image push`            | Push to registry              |
-| **Utilities**                |                               |
-| `faas doctor [runtime]`      | Check dependencies            |
-| `faas install`               | Install faas globally         |
-| `faas uninstall`             | Remove global installation    |
+| Command                                  | Description                       |
+| ---------------------------------------- | --------------------------------- |
+| **Create & Develop**                     |                                   |
+| `faas new <runtime> <name>`              | Create a new function project     |
+| `faas <runtime> <name>`                  | Shorthand for `new`               |
+| `faas init`                              | Initialize existing directory     |
+| `faas dev`                               | Run function locally              |
+| **Containers**                           |                                   |
+| `faas container ls`                      | List deployed containers          |
+| `faas container logs <name>`             | View container logs               |
+| `faas container stop <name>`             | Stop a container                  |
+| **Gateway**                              |                                   |
+| `faas gateway init`                      | Create gateway project            |
+| `faas gateway build`                     | Build gateway image               |
+| `faas gateway start`                     | Start gateway                     |
+| `faas gateway stop`                      | Stop gateway                      |
+| `faas gateway orchestrate init`          | Configure S3 bucket for pipelines |
+| `faas gateway orchestrate add <name>`    | Add a pipeline to S3              |
+| `faas gateway orchestrate ls`            | List defined pipelines            |
+| `faas gateway orchestrate remove <name>` | Remove a pipeline                 |
+| **Proxy**                                |                                   |
+| `faas proxy init`                        | Create Caddy reverse proxy        |
+| `faas proxy add <domain>`                | Add domain route                  |
+| `faas proxy remove <domain>`             | Remove domain route               |
+| `faas proxy ls`                          | List configured domains           |
+| **Deploy**                               |                                   |
+| `faas deploy setup`                      | Guided deploy pipeline setup      |
+| `faas deploy init`                       | Generate deploy workflow          |
+| `faas deploy runner`                     | Generate Forgejo runner setup     |
+| `faas deploy status`                     | Check deployment status           |
+| **Images**                               |                                   |
+| `faas image build`                       | Build Docker image                |
+| `faas image push`                        | Push to registry                  |
+| **Utilities**                            |                                   |
+| `faas doctor [runtime]`                  | Check dependencies                |
+| `faas install`                           | Install faas globally             |
+| `faas uninstall`                         | Remove global installation        |
 
 ---
 

@@ -101,15 +101,29 @@ Commands:
   build                 Build the gateway Docker image
   start                 Start the gateway container
   stop                  Stop the gateway container
+  orchestrate init       Initialize orchestration config
+  orchestrate add <name> Add a pipeline (uploads to S3)
+  orchestrate ls         List defined pipelines
+  orchestrate remove     Remove a pipeline
 
 Options:
   --token <token>       Auth token for the gateway
+  --s3-bucket <bucket>  S3/MinIO bucket for orchestrations
+  --s3-endpoint <url>   S3-compatible endpoint (MinIO/Garage)
+  --s3-region <region>  S3 region (default: us-east-1)
+  --s3-access-key <key> S3 access key for CLI operations
+  --s3-secret-key <key> S3 secret key for CLI operations
+  --steps <a,b,c>       Comma-separated steps for add
+  --mode <mode>         sequential | parallel
 
 Examples:
   faas gateway init                    Create gateway project
   faas gateway build                   Build Docker image
   faas gateway start --token secret    Start with auth token
   faas gateway stop                    Stop the gateway
+  faas gateway orchestrate init --s3-bucket pipelines --s3-endpoint http://minio:9000
+  faas gateway orchestrate add process-order --steps validate,charge,notify --mode sequential
+  faas gateway orchestrate ls
 `)
 }
 
@@ -354,10 +368,43 @@ async function main() {
           showGatewayHelp()
           process.exit(0)
         }
-        const gatewaySuccess = await gateway(gatewaySubcmd, {
+        const s3Bucket =
+          (options['s3-bucket'] as string) || (options.bucket as string)
+        const s3Endpoint =
+          (options['s3-endpoint'] as string) || (options.endpoint as string)
+        const s3Region =
+          (options['s3-region'] as string) || (options.region as string)
+        const s3AccessKey =
+          (options['s3-access-key'] as string) ||
+          (options['access-key'] as string)
+        const s3SecretKey =
+          (options['s3-secret-key'] as string) ||
+          (options['secret-key'] as string)
+
+        const gatewayOptions = {
           output: options.output as string,
           token: options.token as string,
-        })
+          bucket: s3Bucket,
+          endpoint: s3Endpoint,
+          region: s3Region,
+          accessKey: s3AccessKey,
+          secretKey: s3SecretKey,
+        }
+
+        if (gatewaySubcmd === 'orchestrate') {
+          const orchestrateSubcmd = positionalArgs[1]
+          const orchestrateSuccess = await gateway('orchestrate', {
+            ...gatewayOptions,
+            orchestrateSubcommand: orchestrateSubcmd,
+            name: positionalArgs[2],
+            steps: options.steps as string,
+            mode: options.mode as string,
+          })
+          process.exit(orchestrateSuccess ? 0 : 1)
+          break
+        }
+
+        const gatewaySuccess = await gateway(gatewaySubcmd, gatewayOptions)
         process.exit(gatewaySuccess ? 0 : 1)
         break
 

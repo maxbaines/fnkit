@@ -1,7 +1,13 @@
 // Gateway command - create and manage the FaaS API Gateway
 
-import { existsSync, mkdirSync, writeFileSync } from 'fs'
-import { join, resolve } from 'path'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from 'fs'
+import { dirname, join, resolve } from 'path'
 import logger from '../utils/logger'
 import * as docker from '../utils/docker'
 
@@ -9,6 +15,9 @@ const GATEWAY_DIR = 'faas-gateway'
 const GATEWAY_IMAGE = 'faas-gateway:latest'
 const GATEWAY_CONTAINER = 'faas-gateway'
 const FAAS_NETWORK = 'faas-network'
+const ORCHESTRATOR_DIR = 'orchestrator'
+const ORCHESTRATE_CONFIG = '.faas-orchestrate.json'
+const DEFAULT_S3_REGION = 'us-east-1'
 
 // Nginx configuration template with token auth and dynamic routing
 // Uses envsubst to inject FAAS_AUTH_TOKEN at container startup
@@ -72,6 +81,34 @@ http {
             return 200 '{"service": "faas-gateway", "usage": "GET /<container-name>[/path]"}';
         }
 
+        # Orchestrate pipelines
+        location ^~ /orchestrate/ {
+            default_type application/json;
+
+            # Check authentication (if token is configured)
+            set $auth_check "$auth_required:$auth_valid";
+
+            # If auth is required (1) and token is invalid (0), return 401
+            if ($auth_check = "1:0") {
+                return 401 '{"error": "Unauthorized - Invalid or missing Bearer token"}';
+            }
+
+            proxy_pass http://127.0.0.1:3000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header Connection "";
+            proxy_connect_timeout 10s;
+            proxy_read_timeout 60s;
+            proxy_send_timeout 60s;
+
+            # Handle upstream errors
+            proxy_intercept_errors on;
+            error_page 502 503 504 = @upstream_error;
+        }
+
         # All other requests route to containers by name
         # URL: /<container-name>[/optional/path]
         location ~ ^/([a-zA-Z0-9_-]+)(.*)$ {
@@ -116,10 +153,23 @@ http {
 `
 
 // Dockerfile for the gateway - pure nginx, no Go needed
-const DOCKERFILE = `# FaaS Gateway - Pure Nginx with token authentication
+const DOCKERFILE = `# FaaS Gateway - Nginx + Bun orchestrator
+FROM oven/bun:alpine AS orchestrator
+
+WORKDIR /app
+COPY orchestrator/package.json ./
+RUN bun install --production
+COPY orchestrator/index.ts ./index.ts
+
 FROM nginx:alpine
 
 LABEL faas.gateway="true"
+
+# Copy bun runtime from builder
+COPY --from=orchestrator /usr/local/bin/bun /usr/local/bin/bun
+
+# Copy orchestrator app
+COPY --from=orchestrator /app /opt/orchestrator
 
 # Copy nginx config template
 COPY nginx.conf.template /etc/nginx/nginx.conf.template
@@ -130,8 +180,13 @@ RUN chmod +x /start.sh
 
 EXPOSE 8080
 
-# Default to empty token (open mode)
+# Default to empty token (open mode) + S3 defaults
 ENV FAAS_AUTH_TOKEN=""
+ENV S3_ENDPOINT=""
+ENV S3_BUCKET=""
+ENV S3_REGION="us-east-1"
+ENV S3_ACCESS_KEY=""
+ENV S3_SECRET_KEY=""
 
 CMD ["/start.sh"]
 `
@@ -153,6 +208,10 @@ fi
 # Only substitute these two to avoid breaking nginx variables like $host, $remote_addr etc.
 envsubst '\${FAAS_AUTH_TOKEN} \${FAAS_AUTH_ENABLED}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
 
+# Start orchestrator (Bun)
+echo "Starting orchestrator on port 3000"
+bun /opt/orchestrator/index.ts &
+
 # Start nginx
 exec nginx -g 'daemon off;'
 `
@@ -168,6 +227,11 @@ services:
       - "8080:8080"
     environment:
       - FAAS_AUTH_TOKEN=\${FAAS_AUTH_TOKEN:-}
+      - S3_ENDPOINT=\${S3_ENDPOINT:-}
+      - S3_BUCKET=\${S3_BUCKET:-}
+      - S3_REGION=\${S3_REGION:-us-east-1}
+      - S3_ACCESS_KEY=\${S3_ACCESS_KEY:-}
+      - S3_SECRET_KEY=\${S3_SECRET_KEY:-}
     networks:
       - faas-network
     restart: unless-stopped
@@ -178,6 +242,268 @@ networks:
   faas-network:
     name: faas-network
     external: true
+`
+
+const ORCHESTRATOR_PACKAGE_JSON = `{
+  "name": "faas-orchestrator",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.592.0"
+  }
+}
+`
+
+const ORCHESTRATOR_INDEX = `import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
+
+type Pipeline = {
+  mode: 'sequential' | 'parallel'
+  steps: string[]
+}
+
+const PORT = 3000
+const CACHE_TTL_MS = 30_000
+
+const S3_ENDPOINT = process.env.S3_ENDPOINT || ''
+const S3_BUCKET = process.env.S3_BUCKET || ''
+const S3_REGION = process.env.S3_REGION || 'us-east-1'
+const S3_ACCESS_KEY = process.env.S3_ACCESS_KEY || ''
+const S3_SECRET_KEY = process.env.S3_SECRET_KEY || ''
+
+const s3 = new S3Client({
+  region: S3_REGION,
+  endpoint: S3_ENDPOINT || undefined,
+  forcePathStyle: true,
+  credentials:
+    S3_ACCESS_KEY && S3_SECRET_KEY
+      ? {
+          accessKeyId: S3_ACCESS_KEY,
+          secretAccessKey: S3_SECRET_KEY,
+        }
+      : undefined,
+})
+
+const cache = new Map<string, { pipeline: Pipeline; fetchedAt: number }>()
+
+function jsonResponse(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+async function streamToString(stream: unknown): Promise<string> {
+  return await new Response(stream as BodyInit).text()
+}
+
+async function loadPipeline(name: string): Promise<Pipeline> {
+  const cached = cache.get(name)
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    return cached.pipeline
+  }
+
+  if (!S3_BUCKET) {
+    throw new Error('S3_BUCKET is not configured')
+  }
+
+  const command = new GetObjectCommand({
+    Bucket: S3_BUCKET,
+    Key: name + '.json',
+  })
+
+  const result = await s3.send(command)
+  if (!result.Body) {
+    throw new Error('Pipeline not found: ' + name)
+  }
+
+  const raw = await streamToString(result.Body)
+  const pipeline = JSON.parse(raw) as Pipeline
+
+  cache.set(name, { pipeline, fetchedAt: Date.now() })
+  return pipeline
+}
+
+async function parseResponseBody(response: Response): Promise<unknown> {
+  const contentType = response.headers.get('content-type') || ''
+  const text = await response.text()
+
+  if (contentType.includes('application/json')) {
+    try {
+      return JSON.parse(text)
+    } catch {
+      return text
+    }
+  }
+
+  return text
+}
+
+async function callFunction(
+  step: string,
+  path: string,
+  query: string,
+  method: string,
+  body: string,
+  contentType: string,
+): Promise<Response> {
+  return await fetch('http://' + step + ':8080' + path + query, {
+    method,
+    headers: {
+      'content-type': contentType,
+      accept: 'application/json',
+    },
+    body: body.length ? body : undefined,
+  })
+}
+
+async function handleSequential(
+  pipeline: Pipeline,
+  path: string,
+  query: string,
+  method: string,
+  body: string,
+  contentType: string,
+): Promise<Response> {
+  let currentBody = body
+  let currentContentType = contentType
+  let lastStatus = 200
+
+  for (const step of pipeline.steps) {
+    const response = await callFunction(
+      step,
+      path,
+      query,
+      method,
+      currentBody,
+      currentContentType,
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      return jsonResponse(
+        {
+          error: 'Step failed',
+          step,
+          status: response.status,
+          body: errorText,
+        },
+        response.status,
+      )
+    }
+
+    currentBody = await response.text()
+    currentContentType =
+      response.headers.get('content-type') || currentContentType
+    lastStatus = response.status
+  }
+
+  return new Response(currentBody, {
+    status: lastStatus,
+    headers: { 'content-type': currentContentType },
+  })
+}
+
+async function handleParallel(
+  pipeline: Pipeline,
+  path: string,
+  query: string,
+  method: string,
+  body: string,
+  contentType: string,
+): Promise<Response> {
+  const calls = pipeline.steps.map(async (step) => {
+    const response = await callFunction(
+      step,
+      path,
+      query,
+      method,
+      body,
+      contentType,
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(
+        JSON.stringify({
+          step,
+          status: response.status,
+          body: errorText,
+        }),
+      )
+    }
+
+    return { step, result: await parseResponseBody(response) }
+  })
+
+  try {
+    const results = await Promise.all(calls)
+    const merged: Record<string, unknown> = {}
+    for (const { step, result } of results) {
+      merged[step] = result
+    }
+    return jsonResponse(merged)
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Parallel execution failed'
+    return jsonResponse({ error: 'Parallel execution failed', details: message }, 502)
+  }
+}
+
+Bun.serve({
+  port: PORT,
+  async fetch(request) {
+    const url = new URL(request.url)
+
+    if (!url.pathname.startsWith('/orchestrate/')) {
+      return jsonResponse({ error: 'Not found' }, 404)
+    }
+
+    const match = url.pathname.match(/^\/orchestrate\/([^/]+)(.*)$/)
+    if (!match) {
+      return jsonResponse({ error: 'Pipeline name missing' }, 400)
+    }
+
+    const pipelineName = match[1]
+    const path = match[2] || ''
+    const query = url.search || ''
+    const method = request.method || 'POST'
+    const contentType = request.headers.get('content-type') || 'application/json'
+    const body = await request.text()
+
+    try {
+      const pipeline = await loadPipeline(pipelineName)
+
+      if (!pipeline.steps || pipeline.steps.length === 0) {
+        return jsonResponse({ error: 'Pipeline has no steps' }, 400)
+      }
+
+      if (pipeline.mode === 'parallel') {
+        return await handleParallel(
+          pipeline,
+          path,
+          query,
+          method,
+          body,
+          contentType,
+        )
+      }
+
+      return await handleSequential(
+        pipeline,
+        path,
+        query,
+        method,
+        body,
+        contentType,
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      return jsonResponse({ error: message }, 500)
+    }
+  },
+})
+
+console.log('FaaS orchestrator listening on port ' + PORT)
 `
 
 const README = `# FaaS Gateway
@@ -290,6 +616,16 @@ docker compose up -d
 
 export interface GatewayOptions {
   output?: string
+  token?: string
+  bucket?: string
+  endpoint?: string
+  region?: string
+  accessKey?: string
+  secretKey?: string
+  orchestrateSubcommand?: string
+  name?: string
+  steps?: string
+  mode?: string
 }
 
 export async function gatewayInit(
@@ -307,6 +643,7 @@ export async function gatewayInit(
 
   // Create directory
   mkdirSync(targetDir, { recursive: true })
+  mkdirSync(join(targetDir, ORCHESTRATOR_DIR), { recursive: true })
 
   // Write files
   const files = {
@@ -314,11 +651,14 @@ export async function gatewayInit(
     Dockerfile: DOCKERFILE.trim(),
     'start.sh': START_SCRIPT.trim(),
     'docker-compose.yml': DOCKER_COMPOSE.trim(),
+    'orchestrator/package.json': ORCHESTRATOR_PACKAGE_JSON.trim(),
+    'orchestrator/index.ts': ORCHESTRATOR_INDEX.trim(),
     'README.md': README.trim(),
   }
 
   for (const [filename, content] of Object.entries(files)) {
     const filePath = join(targetDir, filename)
+    mkdirSync(dirname(filePath), { recursive: true })
     writeFileSync(filePath, content)
     logger.success(`Created ${filename}`)
   }
@@ -380,7 +720,9 @@ export async function gatewayBuild(
   return success
 }
 
-export async function gatewayStart(token?: string): Promise<boolean> {
+export async function gatewayStart(
+  options: GatewayOptions = {},
+): Promise<boolean> {
   logger.title('Starting FaaS Gateway')
 
   // Check Docker
@@ -422,8 +764,29 @@ export async function gatewayStart(token?: string): Promise<boolean> {
     'unless-stopped',
   ]
 
-  if (token) {
-    args.push('-e', `FAAS_AUTH_TOKEN=${token}`)
+  if (options.token) {
+    args.push('-e', `FAAS_AUTH_TOKEN=${options.token}`)
+  }
+
+  if (options.bucket) {
+    args.push('-e', `S3_BUCKET=${options.bucket}`)
+    args.push('-e', `S3_REGION=${options.region || DEFAULT_S3_REGION}`)
+  }
+
+  if (options.endpoint) {
+    args.push('-e', `S3_ENDPOINT=${options.endpoint}`)
+  }
+
+  if (options.region && !options.bucket) {
+    args.push('-e', `S3_REGION=${options.region}`)
+  }
+
+  if (options.accessKey) {
+    args.push('-e', `S3_ACCESS_KEY=${options.accessKey}`)
+  }
+
+  if (options.secretKey) {
+    args.push('-e', `S3_SECRET_KEY=${options.secretKey}`)
   }
 
   args.push(GATEWAY_IMAGE)
@@ -432,7 +795,7 @@ export async function gatewayStart(token?: string): Promise<boolean> {
 
   if (result.success) {
     logger.success('Gateway started on http://localhost:8080')
-    if (!token) {
+    if (!options.token) {
       logger.warn('No token set - gateway is running in OPEN mode')
     }
     return true
@@ -458,9 +821,263 @@ export async function gatewayStop(): Promise<boolean> {
   }
 }
 
+interface OrchestrateConfig {
+  bucket: string
+  endpoint?: string
+  region?: string
+}
+
+function loadOrchestrateConfig(
+  options: GatewayOptions = {},
+): OrchestrateConfig | null {
+  const configPath = resolve(process.cwd(), ORCHESTRATE_CONFIG)
+  let config: OrchestrateConfig | null = null
+
+  if (existsSync(configPath)) {
+    try {
+      config = JSON.parse(
+        readFileSync(configPath, 'utf-8'),
+      ) as OrchestrateConfig
+    } catch (error) {
+      logger.error(`Failed to parse ${ORCHESTRATE_CONFIG}`)
+      logger.dim(`${error instanceof Error ? error.message : error}`)
+      return null
+    }
+  }
+
+  const merged: OrchestrateConfig = {
+    bucket: options.bucket || config?.bucket || '',
+    endpoint: options.endpoint ?? config?.endpoint,
+    region: options.region ?? config?.region ?? DEFAULT_S3_REGION,
+  }
+
+  if (!merged.bucket) {
+    logger.error('S3 bucket not configured for orchestrations')
+    logger.info(
+      `Run: faas gateway orchestrate init --bucket <bucket> [--endpoint <url>]`,
+    )
+    return null
+  }
+
+  return merged
+}
+
+function buildAwsArgs(
+  config: OrchestrateConfig,
+  commandArgs: string[],
+): string[] {
+  const args: string[] = []
+  if (config.endpoint) {
+    args.push('--endpoint-url', config.endpoint)
+  }
+  if (config.region) {
+    args.push('--region', config.region)
+  }
+  args.push(...commandArgs)
+  return args
+}
+
+function buildAwsCommand(
+  args: string[],
+  options: GatewayOptions,
+  config: OrchestrateConfig,
+): { command: string; args: string[] } {
+  if (options.accessKey || options.secretKey) {
+    const envArgs = []
+    if (options.accessKey) {
+      envArgs.push(`AWS_ACCESS_KEY_ID=${options.accessKey}`)
+    }
+    if (options.secretKey) {
+      envArgs.push(`AWS_SECRET_ACCESS_KEY=${options.secretKey}`)
+    }
+    if (config.region) {
+      envArgs.push(`AWS_REGION=${config.region}`)
+    }
+    envArgs.push('aws', ...args)
+    return { command: 'env', args: envArgs }
+  }
+
+  return { command: 'aws', args }
+}
+
+export async function orchestrateInit(
+  options: GatewayOptions = {},
+): Promise<boolean> {
+  logger.title('Initializing orchestrations config')
+
+  if (!options.bucket) {
+    logger.error('Usage: faas gateway orchestrate init --bucket <bucket>')
+    return false
+  }
+
+  const configPath = resolve(process.cwd(), ORCHESTRATE_CONFIG)
+  const config: OrchestrateConfig = {
+    bucket: options.bucket,
+    endpoint: options.endpoint,
+    region: options.region || DEFAULT_S3_REGION,
+  }
+
+  writeFileSync(configPath, JSON.stringify(config, null, 2))
+  logger.success(`Saved ${ORCHESTRATE_CONFIG}`)
+  logger.dim(`  bucket: ${config.bucket}`)
+  if (config.endpoint) {
+    logger.dim(`  endpoint: ${config.endpoint}`)
+  }
+  logger.dim(`  region: ${config.region || DEFAULT_S3_REGION}`)
+  logger.newline()
+
+  return true
+}
+
+export async function orchestrateAdd(
+  name: string | undefined,
+  options: GatewayOptions = {},
+): Promise<boolean> {
+  if (!name) {
+    logger.error(
+      'Usage: faas gateway orchestrate add <name> --steps a,b,c --mode sequential',
+    )
+    return false
+  }
+
+  const steps = (options.steps || '')
+    .split(',')
+    .map((step) => step.trim())
+    .filter(Boolean)
+
+  if (steps.length === 0) {
+    logger.error('Provide steps with --steps step1,step2,step3')
+    return false
+  }
+
+  const mode = options.mode?.toLowerCase()
+  if (mode !== 'sequential' && mode !== 'parallel') {
+    logger.error('Mode must be "sequential" or "parallel"')
+    return false
+  }
+
+  const config = loadOrchestrateConfig(options)
+  if (!config) {
+    return false
+  }
+
+  const pipeline = { mode, steps }
+  const tempFile = resolve(process.cwd(), `.faas-orchestrate-${name}.json`)
+
+  try {
+    writeFileSync(tempFile, JSON.stringify(pipeline, null, 2))
+    const awsArgs = buildAwsArgs(config, [
+      's3',
+      'cp',
+      tempFile,
+      `s3://${config.bucket}/${name}.json`,
+    ])
+    const command = buildAwsCommand(awsArgs, options, config)
+    const { exec } = await import('../utils/shell')
+    const result = await exec(command.command, command.args)
+
+    if (result.success) {
+      logger.success(`Uploaded pipeline: ${name}`)
+      return true
+    }
+
+    logger.error('Failed to upload pipeline')
+    logger.dim(result.stderr || result.stdout)
+    return false
+  } finally {
+    if (existsSync(tempFile)) {
+      unlinkSync(tempFile)
+    }
+  }
+}
+
+export async function orchestrateList(
+  options: GatewayOptions = {},
+): Promise<boolean> {
+  logger.title('FaaS Orchestrations')
+
+  const config = loadOrchestrateConfig(options)
+  if (!config) {
+    return false
+  }
+
+  const awsArgs = buildAwsArgs(config, ['s3', 'ls', `s3://${config.bucket}/`])
+  const command = buildAwsCommand(awsArgs, options, config)
+  const { exec } = await import('../utils/shell')
+  const result = await exec(command.command, command.args)
+
+  if (!result.success) {
+    logger.error('Failed to list pipelines')
+    logger.dim(result.stderr || result.stdout)
+    return false
+  }
+
+  const lines = result.stdout.split('\n').map((line) => line.trim())
+  const names = lines
+    .map((line) => line.split(/\s+/).pop() || '')
+    .filter((name) => name.endsWith('.json'))
+    .map((name) => name.replace(/\.json$/, ''))
+    .filter(Boolean)
+
+  if (names.length === 0) {
+    logger.info('No pipelines found in the bucket')
+    logger.newline()
+    logger.dim(
+      '  Add one: faas gateway orchestrate add <name> --steps a,b --mode sequential',
+    )
+    logger.newline()
+    return true
+  }
+
+  console.log('')
+  for (const name of names) {
+    console.log(`   🔗 ${name}`)
+  }
+  console.log('')
+  logger.info(
+    `${names.length} pipeline${names.length > 1 ? 's' : ''} configured`,
+  )
+  logger.newline()
+
+  return true
+}
+
+export async function orchestrateRemove(
+  name: string | undefined,
+  options: GatewayOptions = {},
+): Promise<boolean> {
+  if (!name) {
+    logger.error('Usage: faas gateway orchestrate remove <name>')
+    return false
+  }
+
+  const config = loadOrchestrateConfig(options)
+  if (!config) {
+    return false
+  }
+
+  const awsArgs = buildAwsArgs(config, [
+    's3',
+    'rm',
+    `s3://${config.bucket}/${name}.json`,
+  ])
+  const command = buildAwsCommand(awsArgs, options, config)
+  const { exec } = await import('../utils/shell')
+  const result = await exec(command.command, command.args)
+
+  if (result.success) {
+    logger.success(`Removed pipeline: ${name}`)
+    return true
+  }
+
+  logger.error('Failed to remove pipeline')
+  logger.dim(result.stderr || result.stdout)
+  return false
+}
+
 export async function gateway(
   subcommand: string,
-  options: GatewayOptions & { token?: string } = {},
+  options: GatewayOptions = {},
 ): Promise<boolean> {
   switch (subcommand) {
     case 'init':
@@ -468,12 +1085,31 @@ export async function gateway(
     case 'build':
       return gatewayBuild(options)
     case 'start':
-      return gatewayStart(options.token)
+      return gatewayStart(options)
     case 'stop':
       return gatewayStop()
+    case 'orchestrate':
+      switch (options.orchestrateSubcommand) {
+        case 'init':
+          return orchestrateInit(options)
+        case 'add':
+          return orchestrateAdd(options.name, options)
+        case 'ls':
+        case 'list':
+          return orchestrateList(options)
+        case 'remove':
+        case 'rm':
+          return orchestrateRemove(options.name, options)
+        default:
+          logger.error(
+            `Unknown orchestrate command: ${options.orchestrateSubcommand || ''}`,
+          )
+          logger.info('Available: init, add, remove, ls')
+          return false
+      }
     default:
       logger.error(`Unknown gateway command: ${subcommand}`)
-      logger.info('Available commands: init, build, start, stop')
+      logger.info('Available commands: init, build, start, stop, orchestrate')
       return false
   }
 }
