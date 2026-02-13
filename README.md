@@ -13,17 +13,6 @@ Internet → Caddy (TLS/domains) → faas-gateway (auth/routing) → Function co
 
 **Dependencies:** Docker + Git. That's it.
 
-## Features
-
-- 🚀 **Quick scaffolding** — Create new function projects in seconds
-- 🐳 **Docker native** — Build deployable containers with `docker build`
-- 🔧 **Multi-runtime** — Support for 9 different runtimes
-- 🔄 **Git push to deploy** — Automated CI/CD via Forgejo (default) or GitHub Actions
-- 🔒 **Automatic HTTPS** — Caddy reverse proxy with Let's Encrypt
-- 🌐 **API Gateway** — Token auth and container routing via nginx
-- ✅ **Health checks & rollback** — Deploy pipeline with automatic rollback on failure
-- 📦 **Single binary** — No dependencies required
-
 ## Quick Start
 
 ```bash
@@ -31,10 +20,7 @@ Internet → Caddy (TLS/domains) → faas-gateway (auth/routing) → Function co
 faas node my-api
 cd my-api
 
-# Run locally
-faas dev
-
-# Set up CI/CD pipeline (Forgejo by default)
+# Set up CI/CD pipeline
 faas deploy setup
 
 # Push to deploy
@@ -42,20 +28,6 @@ git add . && git commit -m "init" && git push
 
 # Done — your function is live!
 ```
-
-## Supported Runtimes
-
-| Runtime | Command  | Framework                                                                                       |
-| ------- | -------- | ----------------------------------------------------------------------------------------------- |
-| Node.js | `node`   | [functions-framework-nodejs](https://github.com/GoogleCloudPlatform/functions-framework-nodejs) |
-| Python  | `python` | [functions-framework-python](https://github.com/GoogleCloudPlatform/functions-framework-python) |
-| Go      | `go`     | [functions-framework-go](https://github.com/GoogleCloudPlatform/functions-framework-go)         |
-| Java    | `java`   | [functions-framework-java](https://github.com/GoogleCloudPlatform/functions-framework-java)     |
-| Ruby    | `ruby`   | [functions-framework-ruby](https://github.com/GoogleCloudPlatform/functions-framework-ruby)     |
-| .NET    | `dotnet` | [functions-framework-dotnet](https://github.com/GoogleCloudPlatform/functions-framework-dotnet) |
-| PHP     | `php`    | [functions-framework-php](https://github.com/GoogleCloudPlatform/functions-framework-php)       |
-| Dart    | `dart`   | [functions-framework-dart](https://github.com/GoogleCloudPlatform/functions-framework-dart)     |
-| C++     | `cpp`    | [functions-framework-cpp](https://github.com/GoogleCloudPlatform/functions-framework-cpp)       |
 
 ## Installation
 
@@ -66,8 +38,7 @@ Download the pre-built binary for your platform from the [releases page](https:/
 ```bash
 # macOS (Apple Silicon)
 curl -L https://github.com/maxbaines/faas/releases/latest/download/faas-macos-arm64 -o faas
-chmod +x faas
-./faas install  # Installs to /usr/local/bin (requires sudo)
+chmod +x faas && ./faas install
 
 # macOS (Intel)
 curl -L https://github.com/maxbaines/faas/releases/latest/download/faas-macos-x64 -o faas
@@ -98,112 +69,111 @@ bun run build
 # Binary is now at ./dist/faas
 ```
 
-## Usage
-
-### Create a New Function
-
-```bash
-# Using shorthand (runtime as command)
-faas node hello
-faas python myfunction
-faas dotnet my-api
-
-# Using explicit new command
-faas new node hello
-faas new python myfunction
-
-# With git remote
-faas node hello --remote git@github.com:user/hello.git
-```
-
-### Run Locally
-
-```bash
-cd my-function
-faas dev
-
-# With options
-faas dev --target myFunction --port 3000
-```
-
-### Build Docker Image
-
-```bash
-cd my-function
-faas image build
-
-# With custom tag
-faas image build --tag myapp:v1
-
-# Build and push to registry
-faas image push --tag myapp:v1 --registry gcr.io/myproject
-```
-
-### Check Runtime Dependencies
-
-```bash
-# Check all runtimes
-faas doctor
-
-# Check specific runtime
-faas doctor node
-faas doctor dotnet
-```
-
 ---
 
-## Deploy Pipeline (Git Push to Prod)
+## Commands
 
-The core of FaaS is an automated deploy pipeline. Push to git, and your function is live.
-
-```
-git push → CI builds Docker image → deploys container → health check → live
-```
-
-### Forgejo (Default)
-
-Forgejo Actions runs directly on the host via a runner with Docker socket access. No registry needed — images are built and deployed on the same machine.
-
-```
-git push → Forgejo runner → docker build → docker run → faas-network → gateway
-```
-
-### GitHub Actions
-
-GitHub Actions builds the image, pushes to GitHub Container Registry (GHCR), then SSHs to your server to pull and deploy.
-
-```
-git push → GitHub Actions → build & push to GHCR → SSH → docker pull → docker run → gateway
-```
-
-### Set Up the Pipeline
+### Create & Develop
 
 ```bash
-# Inside your function project
-cd my-function
+# Create a new function (shorthand)
+faas node hello
+faas python myfunction
+faas go my-api
 
-# Guided setup (checks prerequisites, creates workflow)
-faas deploy setup
+# Or use the explicit form
+faas new <runtime> <name>
 
-# Or just generate the workflow file
-faas deploy init                      # Forgejo (default)
-faas deploy init --provider github    # GitHub Actions
+# With a git remote
+faas node hello --remote git@github.com:user/hello.git
+
+# Initialize an existing directory
+faas init
+faas init --runtime python
+
+# Run locally
+faas dev
+faas dev --port 3000 --target myFunction
 ```
 
-### Check Deploy Status
+### Container Management — `faas container`
+
+Manage your deployed function containers.
 
 ```bash
-faas deploy status
+faas container ls               # List deployed faas containers
+faas container ls --all         # Include non-faas containers
+faas container logs my-api      # Tail logs (live)
+faas container stop my-api      # Stop a container
 ```
 
-Shows: pipeline type, git remote, uncommitted changes, last commit, and container status.
+### API Gateway — `faas gateway`
 
-### One-Time: Set Up the Forgejo Runner
-
-The runner executes CI workflows and needs Docker socket access to build/deploy containers on the host.
+Centralized token authentication and routing for all function containers via nginx.
 
 ```bash
-# Generate runner setup files
+faas gateway init               # Create gateway project files
+faas gateway build              # Build the gateway Docker image
+faas gateway start --token xyz  # Start with auth token
+faas gateway stop               # Stop the gateway
+```
+
+**How it works:**
+
+```
+Request → Gateway (port 8080) → validates token → proxies to function container
+```
+
+```bash
+# Call a function through the gateway
+curl -H "Authorization: Bearer your-token" http://localhost:8080/my-function
+
+# Path forwarding
+curl -H "Authorization: Bearer your-token" http://localhost:8080/my-function/api/users
+
+# Health check (no auth)
+curl http://localhost:8080/health
+```
+
+### Reverse Proxy — `faas proxy`
+
+Automatic HTTPS and domain management via Caddy with Let's Encrypt.
+
+```bash
+faas proxy init                 # Create Caddy proxy setup
+faas proxy add api.example.com  # Add domain route to gateway
+faas proxy ls                   # List configured domains
+faas proxy remove api.example.com
+```
+
+**Architecture:**
+
+```
+Internet → Caddy (443, auto-TLS) → Gateway (8080, auth) → Function containers
+```
+
+### Deploy Pipeline — `faas deploy`
+
+Automated git-push-to-deploy via Forgejo (default) or GitHub Actions.
+
+```
+Forgejo:  push → runner builds image → deploy container → health check
+GitHub:   push → build & push to GHCR → SSH deploy → health check
+```
+
+```bash
+faas deploy setup               # Interactive setup wizard (recommended)
+faas deploy init                # Generate Forgejo workflow
+faas deploy init --provider github  # Generate GitHub Actions workflow
+faas deploy runner              # Generate Forgejo runner setup files
+faas deploy status              # Check pipeline & container status
+```
+
+#### Forgejo Runner Setup
+
+The runner executes CI workflows and needs Docker socket access to build/deploy on the host.
+
+```bash
 faas deploy runner
 # → Creates faas-runner/ with docker-compose.yml, .env.example, and README
 ```
@@ -216,179 +186,119 @@ Then on your server:
 4. **Start**: `docker compose up -d`
 5. **Verify**: Check Forgejo Admin → Runners — should appear as online
 
-### Full Example
+### Docker Images — `faas image`
+
+Build and push Docker images for your functions.
 
 ```bash
-# Create a function
-faas node my-api
-cd my-api
+faas image build                # Build with default tag
+faas image build --tag myapp:v1 # Build with custom tag
+faas image push --registry ghcr.io  # Build and push to registry
+```
 
-# Set up deployment
-faas deploy setup
+### Utilities
 
-# Add remote and push
-git remote add origin http://forgejo.example.com/user/my-api.git
-git add . && git commit -m "init" && git push -u origin main
-
-# ✅ Function is now live!
-# The pipeline: built image → deployed container → health checked → running
-curl -H "Authorization: Bearer <token>" http://gateway.example.com/my-api
+```bash
+faas doctor                     # Check all runtime dependencies
+faas doctor node                # Check specific runtime
+faas install                    # Install faas to /usr/local/bin
+faas uninstall                  # Remove global installation
 ```
 
 ---
 
-## API Gateway
+## Supported Runtimes
 
-The FaaS Gateway provides centralized token authentication and routing for all your functions.
+| Runtime | Command  | Framework                                                                                       |
+| ------- | -------- | ----------------------------------------------------------------------------------------------- |
+| Node.js | `node`   | [functions-framework-nodejs](https://github.com/GoogleCloudPlatform/functions-framework-nodejs) |
+| Python  | `python` | [functions-framework-python](https://github.com/GoogleCloudPlatform/functions-framework-python) |
+| Go      | `go`     | [functions-framework-go](https://github.com/GoogleCloudPlatform/functions-framework-go)         |
+| Java    | `java`   | [functions-framework-java](https://github.com/GoogleCloudPlatform/functions-framework-java)     |
+| Ruby    | `ruby`   | [functions-framework-ruby](https://github.com/GoogleCloudPlatform/functions-framework-ruby)     |
+| .NET    | `dotnet` | [functions-framework-dotnet](https://github.com/GoogleCloudPlatform/functions-framework-dotnet) |
+| PHP     | `php`    | [functions-framework-php](https://github.com/GoogleCloudPlatform/functions-framework-php)       |
+| Dart    | `dart`   | [functions-framework-dart](https://github.com/GoogleCloudPlatform/functions-framework-dart)     |
+| C++     | `cpp`    | [functions-framework-cpp](https://github.com/GoogleCloudPlatform/functions-framework-cpp)       |
+
+---
+
+## Command Reference
+
+Run `faas <command>` with no subcommand to see detailed help for any group.
+
+| Command                      | Description                   |
+| ---------------------------- | ----------------------------- |
+| **Create & Develop**         |                               |
+| `faas new <runtime> <name>`  | Create a new function project |
+| `faas <runtime> <name>`      | Shorthand for `new`           |
+| `faas init`                  | Initialize existing directory |
+| `faas dev`                   | Run function locally          |
+| **Containers**               |                               |
+| `faas container ls`          | List deployed containers      |
+| `faas container logs <name>` | View container logs           |
+| `faas container stop <name>` | Stop a container              |
+| **Gateway**                  |                               |
+| `faas gateway init`          | Create gateway project        |
+| `faas gateway build`         | Build gateway image           |
+| `faas gateway start`         | Start gateway                 |
+| `faas gateway stop`          | Stop gateway                  |
+| **Proxy**                    |                               |
+| `faas proxy init`            | Create Caddy reverse proxy    |
+| `faas proxy add <domain>`    | Add domain route              |
+| `faas proxy remove <domain>` | Remove domain route           |
+| `faas proxy ls`              | List configured domains       |
+| **Deploy**                   |                               |
+| `faas deploy setup`          | Guided deploy pipeline setup  |
+| `faas deploy init`           | Generate deploy workflow      |
+| `faas deploy runner`         | Generate Forgejo runner setup |
+| `faas deploy status`         | Check deployment status       |
+| **Images**                   |                               |
+| `faas image build`           | Build Docker image            |
+| `faas image push`            | Push to registry              |
+| **Utilities**                |                               |
+| `faas doctor [runtime]`      | Check dependencies            |
+| `faas install`               | Install faas globally         |
+| `faas uninstall`             | Remove global installation    |
+
+---
+
+## Server Setup Checklist
+
+Setting up a fresh server to run FaaS:
 
 ```bash
-# Create the gateway project
+# 1. Install Docker
+curl -fsSL https://get.docker.com | sh
+
+# 2. Create the Docker network
+docker network create faas-network
+
+# 3. Set up the gateway
 faas gateway init
-
-# Build the gateway Docker image
+cd faas-gateway
 faas gateway build
-
-# Start the gateway locally
 faas gateway start --token your-secret-token
+cd ..
 
-# Stop the gateway
-faas gateway stop
-```
-
-**How it works:**
-
-```
-Request → Gateway (port 8080) → validates token → proxies to function container
-```
-
-**Calling functions through the gateway:**
-
-```bash
-# With authentication
-curl -H "Authorization: Bearer your-secret-token" \
-  http://localhost:8080/my-function-name
-
-# The path after the function name is forwarded
-curl -H "Authorization: Bearer your-secret-token" \
-  http://localhost:8080/my-function-name/api/users
-
-# Health check (no auth)
-curl http://localhost:8080/health
-```
-
----
-
-## Reverse Proxy (HTTPS & Domains)
-
-The FaaS Proxy sets up Caddy for automatic HTTPS and domain management. This replaces the need for any external platform to manage domains and TLS certificates.
-
-```bash
-# Create the proxy setup
+# 4. Set up the reverse proxy (for HTTPS/domains)
 faas proxy init
-
-# Add a domain route
 faas proxy add api.example.com
-
-# List configured domains
-faas proxy ls
-
-# Remove a domain
-faas proxy remove api.example.com
-```
-
-**Architecture:**
-
-```
-Internet → Caddy (443, auto-TLS) → Gateway (8080, auth) → Function containers
-```
-
-**Setup on your server:**
-
-```bash
-# 1. Create and start the proxy
-faas proxy init
 cd faas-proxy
-
-# 2. Add your domain
-faas proxy add api.example.com
-
-# 3. Start Caddy
 docker compose up -d
+cd ..
 
-# 4. Point DNS A record to your server IP
-# Caddy auto-provisions TLS certificates via Let's Encrypt
+# 5. Set up the Forgejo runner (for CI/CD)
+faas deploy runner
+cd faas-runner
+cp .env.example .env
+# Edit .env with your Forgejo URL and runner token
+docker compose up -d
+cd ..
+
+# ✅ Server is ready!
+# Now create functions, push to git, and they deploy automatically.
 ```
-
----
-
-## Container Management
-
-```bash
-# List deployed faas containers
-faas container ls
-
-# Show all containers (not just faas)
-faas container ls --all
-
-# View container logs
-faas container logs my-function
-
-# Stop a container
-faas container stop my-function
-```
-
-### Initialize Existing Project
-
-```bash
-cd existing-project
-faas init
-
-# Specify runtime
-faas init --runtime python
-```
-
-## Commands
-
-| Command                 | Description                   |
-| ----------------------- | ----------------------------- |
-| `new <runtime> <name>`  | Create a new function project |
-| `init`                  | Initialize existing directory |
-| `dev`                   | Run function locally          |
-| `container ls`          | List deployed containers      |
-| `container logs`        | View container logs           |
-| `container stop`        | Stop a container              |
-| `gateway init`          | Create gateway project        |
-| `gateway build`         | Build gateway image           |
-| `gateway start`         | Start gateway                 |
-| `gateway stop`          | Stop gateway                  |
-| `proxy init`            | Create Caddy reverse proxy    |
-| `proxy add <domain>`    | Add domain route              |
-| `proxy remove <domain>` | Remove domain route           |
-| `proxy ls`              | List configured domains       |
-| `deploy setup`          | Guided deploy pipeline setup  |
-| `deploy init`           | Generate deploy workflow      |
-| `deploy runner`         | Generate Forgejo runner setup |
-| `deploy status`         | Check deployment status       |
-| `image build`           | Build Docker image            |
-| `image push`            | Push to registry              |
-| `doctor [runtime]`      | Check dependencies            |
-| `install`               | Install faas globally         |
-| `uninstall`             | Remove global installation    |
-
-## Options
-
-| Option                  | Short | Description                       |
-| ----------------------- | ----- | --------------------------------- |
-| `--remote <url>`        | `-r`  | Git remote for new/init           |
-| `--tag <tag>`           | `-t`  | Docker image tag                  |
-| `--registry <registry>` |       | Docker registry                   |
-| `--push`                |       | Push after build                  |
-| `--target <function>`   |       | Function target                   |
-| `--port <port>`         | `-p`  | Port for dev server               |
-| `--runtime <runtime>`   |       | Runtime for init                  |
-| `--token <token>`       |       | Auth token for gateway            |
-| `--provider <provider>` |       | Deploy provider (forgejo\|github) |
-| `--all`                 |       | Show all containers               |
 
 ## Development
 
@@ -412,20 +322,21 @@ bun run typecheck
 ```
 faas/
 ├── src/
-│   ├── index.ts              # CLI entry point
+│   ├── index.ts              # CLI entry point & help system
 │   ├── commands/
 │   │   ├── create.ts         # Create function project
 │   │   ├── init.ts           # Initialize existing project
 │   │   ├── run.ts            # Local dev server
-│   │   ├── publish.ts        # Docker build
+│   │   ├── publish.ts        # Docker build & push
 │   │   ├── containers.ts     # Container management
-│   │   ├── gateway.ts        # Gateway management
+│   │   ├── gateway.ts        # API gateway management
 │   │   ├── proxy.ts          # Caddy proxy management
-│   │   ├── deploy.ts         # Deploy pipelines (Forgejo/GitHub)
-│   │   └── doctor.ts         # Runtime checks
+│   │   ├── deploy.ts         # CI/CD pipelines (Forgejo/GitHub)
+│   │   ├── doctor.ts         # Runtime dependency checks
+│   │   └── global.ts         # Install/uninstall
 │   ├── runtimes/
 │   │   ├── base.ts           # Runtime interface
-│   │   └── index.ts          # Runtime definitions
+│   │   └── *.ts              # Runtime definitions (9 runtimes)
 │   └── utils/
 │       ├── docker.ts         # Docker operations
 │       ├── git.ts            # Git operations
@@ -434,45 +345,6 @@ faas/
 ├── dist/
 │   └── faas                  # Compiled binary
 └── package.json
-```
-
-## Server Setup Checklist
-
-Setting up a fresh server to run FaaS:
-
-```bash
-# 1. Install Docker
-curl -fsSL https://get.docker.com | sh
-
-# 2. Create the Docker network
-docker network create faas-network
-
-# 3. Set up the gateway
-faas gateway init
-cd faas-gateway
-docker build -t faas-gateway .
-docker run -d --name faas-gateway --network faas-network \
-  -p 8080:8080 -e FAAS_AUTH_TOKEN=your-secret \
-  --restart unless-stopped faas-gateway
-cd ..
-
-# 4. Set up the reverse proxy (for HTTPS/domains)
-faas proxy init
-faas proxy add api.example.com
-cd faas-proxy
-docker compose up -d
-cd ..
-
-# 5. Set up the Forgejo runner (for CI/CD)
-faas deploy runner
-cd faas-runner
-cp .env.example .env
-# Edit .env with your Forgejo URL and runner token
-docker compose up -d
-cd ..
-
-# ✅ Server is ready!
-# Now create functions, push to git, and they deploy automatically.
 ```
 
 ## License

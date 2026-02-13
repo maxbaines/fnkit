@@ -11,7 +11,6 @@ import { containers } from './commands/containers'
 import { gateway } from './commands/gateway'
 import { deploy } from './commands/deploy'
 import { proxy } from './commands/proxy'
-import { getRuntimeNames } from './runtimes'
 import logger from './utils/logger'
 
 const VERSION = '0.7.1'
@@ -31,78 +30,163 @@ const CANONICAL_RUNTIMES = [
 
 function showHelp() {
   console.log(`
-faas - Functions as a Service CLI
+faas v${VERSION} — Functions as a Service CLI
 
 Usage:
-  faas <command> [subcommand] [options]
-  faas <runtime> <name>           Quick create (shorthand)
+  faas <command> [options]
+  faas <runtime> <name>              Quick create (shorthand for 'new')
 
 Commands:
-  new <runtime> <name>            Create a new function
-  init                            Initialize existing directory
-  dev                             Run function locally
+  new <runtime> <name>               Create a new function project
+  init                               Initialize existing directory
+  dev                                Run function locally
 
-  container ls                    List deployed containers
-  container logs <name>           View container logs
-  container stop <name>           Stop a container
+  container ...                      Manage deployed containers
+  gateway ...                        Manage API gateway
+  proxy ...                          Manage reverse proxy (Caddy)
+  deploy ...                         Manage CI/CD deploy pipeline
+  image ...                          Build & push Docker images
 
-  gateway init                    Create gateway project
-  gateway build                   Build gateway image
-  gateway start                   Start gateway
-  gateway stop                    Stop gateway
-
-  proxy init                      Create Caddy reverse proxy
-  proxy add <domain>              Add domain route
-  proxy remove <domain>           Remove domain route
-  proxy ls                        List configured domains
-
-  deploy setup                    Guided deploy pipeline setup
-  deploy init                     Generate deploy workflow
-  deploy runner                   Generate Forgejo runner setup
-  deploy status                   Check deployment status
-
-  image build                     Build Docker image
-  image push                      Push to registry
-
-  doctor [runtime]                Check dependencies
-  install                         Install faas globally
-  uninstall                       Uninstall faas globally
+  doctor [runtime]                   Check runtime dependencies
+  install                            Install faas globally
+  uninstall                          Remove global installation
 
 Runtimes:
   ${CANONICAL_RUNTIMES.join(', ')}
 
-Pipeline (git push to prod):
-  1. faas node my-api              Create function
-  2. faas deploy setup             Configure CI/CD pipeline
-  3. git push                      Deploy to production
-  
-  Forgejo (default): push → runner builds image → deploy container → health check
-  GitHub:            push → build & push to GHCR → SSH deploy → health check
+Quick Start:
+  faas node my-api                   Create a function
+  faas deploy setup                  Set up CI/CD pipeline
+  git push                           Deploy to production
 
-Examples:
-  faas node hello                 Create Node.js function
-  faas new python api             Create Python function
-  faas dev                        Run locally
-  faas image build                Build Docker image
-  faas deploy setup               Set up CI/CD pipeline
-  faas deploy status              Check deploy status
-  faas container ls               List running functions
-  faas gateway start --token xyz  Start gateway with auth
-  faas proxy init                 Create reverse proxy
-  faas proxy add api.example.com  Add domain route
-  faas doctor node                Check Node.js dependencies
+Run 'faas <command>' for subcommand details.
+`)
+}
+
+function showContainerHelp() {
+  console.log(`
+faas container — Manage deployed containers
+
+Usage:
+  faas container <command> [options]
+
+Commands:
+  ls                    List deployed faas containers
+  logs <name>           View container logs (live)
+  stop <name>           Stop a running container
 
 Options:
-  --remote, -r <url>              Git remote for new/init
-  --tag, -t <tag>                 Docker image tag
-  --registry <registry>           Docker registry
-  --push                          Push after build
-  --target <function>             Function target
-  --port, -p <port>               Port for dev server
-  --runtime <runtime>             Runtime for init
-  --token <token>                 Auth token for gateway
-  --provider <provider>           Deploy provider (forgejo|github)
-  --all                           Show all containers
+  --all                 Show all containers (not just faas)
+
+Examples:
+  faas container ls             List running functions
+  faas container ls --all       Include non-faas containers
+  faas container logs my-api    Tail logs for my-api
+  faas container stop my-api    Stop my-api container
+`)
+}
+
+function showGatewayHelp() {
+  console.log(`
+faas gateway — Manage the API gateway
+
+The gateway provides centralized token authentication and routing
+for all your function containers via nginx.
+
+Usage:
+  faas gateway <command> [options]
+
+Commands:
+  init                  Create gateway project files
+  build                 Build the gateway Docker image
+  start                 Start the gateway container
+  stop                  Stop the gateway container
+
+Options:
+  --token <token>       Auth token for the gateway
+
+Examples:
+  faas gateway init                    Create gateway project
+  faas gateway build                   Build Docker image
+  faas gateway start --token secret    Start with auth token
+  faas gateway stop                    Stop the gateway
+`)
+}
+
+function showProxyHelp() {
+  console.log(`
+faas proxy — Manage reverse proxy (Caddy)
+
+Sets up Caddy for automatic HTTPS and domain management.
+Caddy handles TLS certificates via Let's Encrypt automatically.
+
+Usage:
+  faas proxy <command> [options]
+
+Commands:
+  init                  Create Caddy proxy setup
+  add <domain>          Add a domain route to the gateway
+  remove <domain>       Remove a domain route
+  ls                    List configured domains
+
+Examples:
+  faas proxy init                      Create proxy project
+  faas proxy add api.example.com       Route domain to gateway
+  faas proxy ls                        List all domains
+  faas proxy remove api.example.com    Remove domain route
+`)
+}
+
+function showDeployHelp() {
+  console.log(`
+faas deploy — Manage CI/CD deploy pipeline
+
+Automated git-push-to-deploy via Forgejo (default) or GitHub Actions.
+
+  Forgejo:  push → runner builds image → deploy container → health check
+  GitHub:   push → build & push to GHCR → SSH deploy → health check
+
+Usage:
+  faas deploy <command> [options]
+
+Commands:
+  setup                 Guided deploy pipeline setup (recommended)
+  init                  Generate deploy workflow file
+  runner                Generate Forgejo runner setup files
+  status                Check deployment status
+
+Options:
+  --provider <name>     Deploy provider: forgejo (default) or github
+
+Examples:
+  faas deploy setup                    Interactive setup wizard
+  faas deploy init                     Generate Forgejo workflow
+  faas deploy init --provider github   Generate GitHub Actions workflow
+  faas deploy runner                   Create runner docker-compose
+  faas deploy status                   Check pipeline & container status
+`)
+}
+
+function showImageHelp() {
+  console.log(`
+faas image — Build & push Docker images
+
+Usage:
+  faas image <command> [options]
+
+Commands:
+  build                 Build Docker image for the current function
+  push                  Build and push image to a registry
+
+Options:
+  --tag, -t <tag>       Docker image tag (default: function name)
+  --registry <url>      Docker registry URL
+  --target <function>   Function target name
+
+Examples:
+  faas image build                     Build with default tag
+  faas image build --tag myapp:v1      Build with custom tag
+  faas image push --registry ghcr.io   Build and push to registry
 `)
 }
 
@@ -207,9 +291,9 @@ async function main() {
 
       case 'container':
         const containerSubcmd = positionalArgs[0]
-        if (!containerSubcmd) {
-          logger.error('Usage: faas container <ls|logs|stop> [name]')
-          process.exit(1)
+        if (!containerSubcmd || options.help || options.h) {
+          showContainerHelp()
+          process.exit(0)
         }
 
         switch (containerSubcmd) {
@@ -266,13 +350,9 @@ async function main() {
 
       case 'gateway':
         const gatewaySubcmd = positionalArgs[0]
-        if (!gatewaySubcmd) {
-          logger.error('Usage: faas gateway <init|build|start|stop>')
-          logger.info('  init   - Create gateway project files')
-          logger.info('  build  - Build the gateway Docker image')
-          logger.info('  start  - Start the gateway container')
-          logger.info('  stop   - Stop the gateway container')
-          process.exit(1)
+        if (!gatewaySubcmd || options.help || options.h) {
+          showGatewayHelp()
+          process.exit(0)
         }
         const gatewaySuccess = await gateway(gatewaySubcmd, {
           output: options.output as string,
@@ -287,13 +367,9 @@ async function main() {
 
       case 'proxy':
         const proxySubcmd = positionalArgs[0]
-        if (!proxySubcmd) {
-          logger.error('Usage: faas proxy <init|add|remove|ls>')
-          logger.info('  init            - Create Caddy proxy setup')
-          logger.info('  add <domain>    - Add domain route')
-          logger.info('  remove <domain> - Remove domain route')
-          logger.info('  ls              - List configured domains')
-          process.exit(1)
+        if (!proxySubcmd || options.help || options.h) {
+          showProxyHelp()
+          process.exit(0)
         }
         const proxySuccess = await proxy(proxySubcmd, {
           output: options.output as string,
@@ -308,13 +384,9 @@ async function main() {
 
       case 'deploy':
         const deploySubcmd = positionalArgs[0]
-        if (!deploySubcmd) {
-          logger.error('Usage: faas deploy <setup|init|runner|status>')
-          logger.info('  setup  - Guided deploy pipeline setup')
-          logger.info('  init   - Generate deploy workflow (Forgejo or GitHub)')
-          logger.info('  runner - Generate Forgejo runner setup')
-          logger.info('  status - Check deployment status')
-          process.exit(1)
+        if (!deploySubcmd || options.help || options.h) {
+          showDeployHelp()
+          process.exit(0)
         }
         const deploySuccess = await deploy(deploySubcmd, {
           provider: options.provider as 'forgejo' | 'github' | undefined,
@@ -329,9 +401,9 @@ async function main() {
 
       case 'image':
         const imageSubcmd = positionalArgs[0]
-        if (!imageSubcmd) {
-          logger.error('Usage: faas image <build|push>')
-          process.exit(1)
+        if (!imageSubcmd || options.help || options.h) {
+          showImageHelp()
+          process.exit(0)
         }
 
         switch (imageSubcmd) {
