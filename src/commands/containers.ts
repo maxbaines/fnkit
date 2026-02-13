@@ -30,7 +30,7 @@ export async function containers(
     '╔════════════════════════════════════════════════════════════════╗',
   )
   console.log(
-    '║                    🐳 FAAS Containers                          ║',
+    '║                    🐳 FAAS Containers                        ║',
   )
   console.log(
     '╚════════════════════════════════════════════════════════════════╝',
@@ -58,35 +58,23 @@ export async function containers(
 
   // Calculate column widths
   const nameWidth = Math.max(12, ...containerList.map((c) => c.name.length))
-  const projectWidth = Math.max(
-    10,
-    ...containerList.map(
-      (c) => (c.labels['coolify.projectName'] || '-').length,
-    ),
-  )
-  const serviceWidth = Math.max(
-    10,
-    ...containerList.map((c) => (c.labels['coolify.name'] || '-').length),
-  )
+  const imageWidth = Math.max(10, ...containerList.map((c) => c.image.length))
 
   // Print header
   console.log(
-    `   ${'NAME'.padEnd(nameWidth)}  STATUS     ${'PROJECT'.padEnd(projectWidth)}  ${'SERVICE'.padEnd(serviceWidth)}  URL`,
+    `   ${'NAME'.padEnd(nameWidth)}  STATUS     ${'IMAGE'.padEnd(imageWidth)}  PORTS`,
   )
-  console.log(`   ${'─'.repeat(nameWidth + projectWidth + serviceWidth + 50)}`)
+  console.log(`   ${'─'.repeat(nameWidth + imageWidth + 30)}`)
 
   // Print containers
   for (const container of containerList) {
     const isRunning = container.state === 'running'
     const statusIcon = isRunning ? '🟢' : '⚫'
     const statusText = isRunning ? 'running' : 'stopped'
-
-    const projectName = container.labels['coolify.projectName'] || '-'
-    const serviceName = container.labels['coolify.name'] || '-'
-    const url = container.labels['caddy_0'] || '-'
+    const ports = container.ports || '-'
 
     console.log(
-      `   ${statusIcon} ${container.name.padEnd(nameWidth)}  ${statusText.padEnd(9)}  ${projectName.padEnd(projectWidth)}  ${serviceName.padEnd(serviceWidth)}  ${url}`,
+      `   ${statusIcon} ${container.name.padEnd(nameWidth)}  ${statusText.padEnd(9)}  ${container.image.padEnd(imageWidth)}  ${ports}`,
     )
   }
 
@@ -100,10 +88,10 @@ export async function containers(
 
   // Commands hint
   console.log('   Commands:')
-  console.log('   - Logs:   docker logs <name>')
-  console.log('   - Shell:  docker exec -it <name> sh')
-  console.log('   - Stop:   docker stop <name>')
-  console.log('   - Remove: docker rm <name>')
+  console.log('   - Logs:    faas container logs <name>')
+  console.log('   - Stop:    faas container stop <name>')
+  console.log('   - Shell:   docker exec -it <name> sh')
+  console.log('   - Remove:  docker rm <name>')
   console.log('')
 
   return true

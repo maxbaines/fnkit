@@ -3,11 +3,6 @@
 import logger from '../utils/logger'
 import { commandExists, getCommandVersion } from '../utils/shell'
 import { isDockerAvailable, isDockerRunning } from '../utils/docker'
-import {
-  isPackAvailable,
-  getPackVersion,
-  PACK_INSTALL_HINT,
-} from '../utils/pack'
 import { getAllRuntimes, getRuntime } from '../runtimes'
 import type { Runtime } from '../runtimes'
 
@@ -47,17 +42,6 @@ export async function doctor(runtimeName?: string): Promise<boolean> {
     logger.error('docker: not installed')
     logger.dim('  Install from https://docker.com')
     allGood = false
-  }
-
-  // Pack CLI (buildpacks) - optional, only needed for 'faas publish'
-  const packInstalled = await isPackAvailable()
-  if (packInstalled) {
-    const version = await getPackVersion()
-    logger.success(`pack: ${version}`)
-  } else {
-    logger.warn('pack: not installed (optional, needed for faas publish)')
-    logger.dim(`  ${PACK_INSTALL_HINT}`)
-    // Don't set allGood = false - pack is optional
   }
 
   logger.newline()

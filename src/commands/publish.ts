@@ -1,9 +1,8 @@
-// Publish command - build deployable container using Google Cloud Buildpacks
+// Publish command - build deployable container using Docker
 
 import { existsSync } from 'fs'
 import { basename, resolve } from 'path'
 import logger from '../utils/logger'
-import * as pack from '../utils/pack'
 import * as docker from '../utils/docker'
 
 export interface PublishOptions {
@@ -19,17 +18,15 @@ export async function publish(options: PublishOptions = {}): Promise<boolean> {
 
   logger.title(`Publishing: ${projectName}`)
 
-  // Check pack CLI availability
-  if (!(await pack.isPackAvailable())) {
-    logger.error('pack CLI is not installed')
-    logger.dim(pack.PACK_INSTALL_HINT)
+  // Check for Dockerfile
+  const dockerfilePath = `${projectDir}/Dockerfile`
+  if (!existsSync(dockerfilePath)) {
+    logger.error('No Dockerfile found in project directory')
+    logger.info('Run "faas init" to generate a Dockerfile for your project')
     return false
   }
 
-  const packVersion = await pack.getPackVersion()
-  logger.success(`pack CLI: ${packVersion}`)
-
-  // Check Docker availability (required by pack)
+  // Check Docker availability
   if (!(await docker.isDockerAvailable())) {
     logger.error('Docker is not installed')
     logger.dim('Install Docker from https://docker.com')
@@ -45,17 +42,12 @@ export async function publish(options: PublishOptions = {}): Promise<boolean> {
   logger.success('Docker is available')
 
   // Determine tag
-  const tag = options.tag || `${projectName}:latest`
+  const tag = options.tag || `faas-fn-${projectName}:latest`
   const fullTag = options.registry ? `${options.registry}/${tag}` : tag
 
-  // Detect function target from common patterns
-  const target = options.target || detectFunctionTarget(projectDir)
-
-  // Build with buildpacks
-  const buildSuccess = await pack.build(projectDir, {
+  // Build with Docker
+  const buildSuccess = await docker.build(projectDir, {
     tag: fullTag,
-    target,
-    signatureType: 'http',
   })
 
   if (!buildSuccess) {
@@ -77,11 +69,11 @@ export async function publish(options: PublishOptions = {}): Promise<boolean> {
   }
 
   logger.newline()
-  logger.success('Publish complete!')
+  logger.success('Build complete!')
   logger.newline()
   logger.info('Run with gateway (recommended):')
   logger.dim(
-    `  docker run -d --name ${projectName} --network faas-network ${fullTag}`,
+    `  docker run -d --name ${projectName} --network faas-network --label faas.fn=true ${fullTag}`,
   )
   logger.dim(
     `  curl -H "Authorization: Bearer <token>" http://localhost:8080/${projectName}`,
@@ -93,25 +85,6 @@ export async function publish(options: PublishOptions = {}): Promise<boolean> {
   logger.newline()
 
   return true
-}
-
-function detectFunctionTarget(projectDir: string): string {
-  // Try to detect function name from common patterns
-  // Default to 'helloWorld' which is the common example name
-
-  // Check for package.json with main field
-  const packageJsonPath = `${projectDir}/package.json`
-  if (existsSync(packageJsonPath)) {
-    try {
-      const pkg = require(packageJsonPath)
-      if (pkg.main) {
-        // Extract function name from main if it looks like a function export
-        return 'helloWorld'
-      }
-    } catch {}
-  }
-
-  return 'helloWorld'
 }
 
 export default publish

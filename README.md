@@ -1,14 +1,47 @@
 # FAAS CLI
 
-A command-line tool for scaffolding and deploying serverless functions using the [Google Cloud Functions Framework](https://github.com/GoogleCloudPlatform/functions-framework).
+A command-line tool for scaffolding and deploying serverless functions using the [Google Cloud Functions Framework](https://github.com/GoogleCloudPlatform/functions-framework). Git push to deploy — no external platforms required.
+
+## Architecture
+
+```
+Internet → Caddy (TLS/domains) → faas-gateway (auth/routing) → Function containers
+                                                                    ↑
+                                                    Forgejo/GitHub Actions
+                                                    (git push → docker build → deploy)
+```
+
+**Dependencies:** Docker + Git. That's it.
 
 ## Features
 
-- 🚀 **Quick scaffolding** - Create new function projects in seconds
-- 🐳 **Docker support** - Build deployable containers with one command
-- 🔧 **Multi-runtime** - Support for 9 different runtimes
-- ✅ **Runtime checks** - Verify your development environment
-- 📦 **Single binary** - No dependencies required
+- 🚀 **Quick scaffolding** — Create new function projects in seconds
+- 🐳 **Docker native** — Build deployable containers with `docker build`
+- 🔧 **Multi-runtime** — Support for 9 different runtimes
+- 🔄 **Git push to deploy** — Automated CI/CD via Forgejo (default) or GitHub Actions
+- 🔒 **Automatic HTTPS** — Caddy reverse proxy with Let's Encrypt
+- 🌐 **API Gateway** — Token auth and container routing via nginx
+- ✅ **Health checks & rollback** — Deploy pipeline with automatic rollback on failure
+- 📦 **Single binary** — No dependencies required
+
+## Quick Start
+
+```bash
+# Create a function
+faas node my-api
+cd my-api
+
+# Run locally
+faas dev
+
+# Set up CI/CD pipeline (Forgejo by default)
+faas deploy setup
+
+# Push to deploy
+git add . && git commit -m "init" && git push
+
+# Done — your function is live!
+```
 
 ## Supported Runtimes
 
@@ -28,33 +61,29 @@ A command-line tool for scaffolding and deploying serverless functions using the
 
 ### From Binary
 
-Download the pre-built binary for your platform from the [releases page](https://github.com/your-repo/faas/releases).
+Download the pre-built binary for your platform from the [releases page](https://github.com/maxbaines/faas/releases).
 
 ```bash
 # macOS (Apple Silicon)
-curl -L https://github.com/your-repo/faas/releases/latest/download/faas-macos-arm64 -o faas
+curl -L https://github.com/maxbaines/faas/releases/latest/download/faas-macos-arm64 -o faas
 chmod +x faas
 ./faas install  # Installs to /usr/local/bin (requires sudo)
 
 # macOS (Intel)
-curl -L https://github.com/your-repo/faas/releases/latest/download/faas-macos-x64 -o faas
-chmod +x faas
-./faas install
+curl -L https://github.com/maxbaines/faas/releases/latest/download/faas-macos-x64 -o faas
+chmod +x faas && ./faas install
 
 # Linux (x64)
-curl -L https://github.com/your-repo/faas/releases/latest/download/faas-linux-x64 -o faas
-chmod +x faas
-./faas install
+curl -L https://github.com/maxbaines/faas/releases/latest/download/faas-linux-x64 -o faas
+chmod +x faas && ./faas install
 
 # Linux (ARM64)
-curl -L https://github.com/your-repo/faas/releases/latest/download/faas-linux-arm64 -o faas
-chmod +x faas
-./faas install
+curl -L https://github.com/maxbaines/faas/releases/latest/download/faas-linux-arm64 -o faas
+chmod +x faas && ./faas install
 
 # Windows (PowerShell as Administrator)
-Invoke-WebRequest -Uri https://github.com/your-repo/faas/releases/latest/download/faas-windows-x64.exe -OutFile faas.exe
+Invoke-WebRequest -Uri https://github.com/maxbaines/faas/releases/latest/download/faas-windows-x64.exe -OutFile faas.exe
 .\faas.exe install
-# Then add C:\Program Files\faas to your PATH
 ```
 
 ### From Source
@@ -62,7 +91,7 @@ Invoke-WebRequest -Uri https://github.com/your-repo/faas/releases/latest/downloa
 Requires [Bun](https://bun.sh) to be installed.
 
 ```bash
-git clone https://github.com/your-repo/faas.git
+git clone https://github.com/maxbaines/faas.git
 cd faas
 bun install
 bun run build
@@ -110,22 +139,6 @@ faas image build --tag myapp:v1
 faas image push --tag myapp:v1 --registry gcr.io/myproject
 ```
 
-### Manage Containers
-
-```bash
-# List deployed faas containers
-faas container ls
-
-# Show all containers (not just faas)
-faas container ls --all
-
-# View container logs
-faas container logs my-function
-
-# Stop a container
-faas container stop my-function
-```
-
 ### Check Runtime Dependencies
 
 ```bash
@@ -137,9 +150,96 @@ faas doctor node
 faas doctor dotnet
 ```
 
-### API Gateway (Token Authentication)
+---
 
-The FaaS Gateway provides centralized token authentication for all your functions. Deploy it once and route all function calls through it.
+## Deploy Pipeline (Git Push to Prod)
+
+The core of FaaS is an automated deploy pipeline. Push to git, and your function is live.
+
+```
+git push → CI builds Docker image → deploys container → health check → live
+```
+
+### Forgejo (Default)
+
+Forgejo Actions runs directly on the host via a runner with Docker socket access. No registry needed — images are built and deployed on the same machine.
+
+```
+git push → Forgejo runner → docker build → docker run → faas-network → gateway
+```
+
+### GitHub Actions
+
+GitHub Actions builds the image, pushes to GitHub Container Registry (GHCR), then SSHs to your server to pull and deploy.
+
+```
+git push → GitHub Actions → build & push to GHCR → SSH → docker pull → docker run → gateway
+```
+
+### Set Up the Pipeline
+
+```bash
+# Inside your function project
+cd my-function
+
+# Guided setup (checks prerequisites, creates workflow)
+faas deploy setup
+
+# Or just generate the workflow file
+faas deploy init                      # Forgejo (default)
+faas deploy init --provider github    # GitHub Actions
+```
+
+### Check Deploy Status
+
+```bash
+faas deploy status
+```
+
+Shows: pipeline type, git remote, uncommitted changes, last commit, and container status.
+
+### One-Time: Set Up the Forgejo Runner
+
+The runner executes CI workflows and needs Docker socket access to build/deploy containers on the host.
+
+```bash
+# Generate runner setup files
+faas deploy runner
+# → Creates faas-runner/ with docker-compose.yml, .env.example, and README
+```
+
+Then on your server:
+
+1. **Enable Actions** in Forgejo: Site Administration → Actions → Enable
+2. **Get a registration token**: Site Administration → Actions → Runners → Create new runner
+3. **Configure**: `cp .env.example .env` and fill in your values
+4. **Start**: `docker compose up -d`
+5. **Verify**: Check Forgejo Admin → Runners — should appear as online
+
+### Full Example
+
+```bash
+# Create a function
+faas node my-api
+cd my-api
+
+# Set up deployment
+faas deploy setup
+
+# Add remote and push
+git remote add origin http://forgejo.example.com/user/my-api.git
+git add . && git commit -m "init" && git push -u origin main
+
+# ✅ Function is now live!
+# The pipeline: built image → deployed container → health checked → running
+curl -H "Authorization: Bearer <token>" http://gateway.example.com/my-api
+```
+
+---
+
+## API Gateway
+
+The FaaS Gateway provides centralized token authentication and routing for all your functions.
 
 ```bash
 # Create the gateway project
@@ -155,10 +255,10 @@ faas gateway start --token your-secret-token
 faas gateway stop
 ```
 
-**Architecture:**
+**How it works:**
 
 ```
-Request → Gateway (port 8080) → validates token → Function container
+Request → Gateway (port 8080) → validates token → proxies to function container
 ```
 
 **Calling functions through the gateway:**
@@ -171,92 +271,70 @@ curl -H "Authorization: Bearer your-secret-token" \
 # The path after the function name is forwarded
 curl -H "Authorization: Bearer your-secret-token" \
   http://localhost:8080/my-function-name/api/users
+
+# Health check (no auth)
+curl http://localhost:8080/health
 ```
 
-**Deploying to Coolify:**
+---
 
-1. Deploy the `faas-gateway` directory as a Docker service
-2. Set the `FAAS_AUTH_TOKEN` environment variable
-3. Ensure all function containers are on the same Docker network (`faas-network`)
-4. Point your domain at the gateway
+## Reverse Proxy (HTTPS & Domains)
 
-### Deploy to Remote Server (Git Push to Deploy)
+The FaaS Proxy sets up Caddy for automatic HTTPS and domain management. This replaces the need for any external platform to manage domains and TLS certificates.
 
-Deploy your function containers to a remote Linux server by pushing to Git. Supports Forgejo (default) and GitHub.
+```bash
+# Create the proxy setup
+faas proxy init
+
+# Add a domain route
+faas proxy add api.example.com
+
+# List configured domains
+faas proxy ls
+
+# Remove a domain
+faas proxy remove api.example.com
+```
 
 **Architecture:**
 
 ```
-git push → Forgejo/GitHub Actions → Build image → Deploy container → faas-network → Gateway
+Internet → Caddy (443, auto-TLS) → Gateway (8080, auth) → Function containers
 ```
 
-#### One-Time: Set Up the Forgejo Runner
-
-The runner executes CI workflows and needs Docker socket access to build/deploy containers on the host.
+**Setup on your server:**
 
 ```bash
-# Generate runner setup files
-faas deploy runner
-# → Creates faas-runner/ with docker-compose.yml and instructions
+# 1. Create and start the proxy
+faas proxy init
+cd faas-proxy
+
+# 2. Add your domain
+faas proxy add api.example.com
+
+# 3. Start Caddy
+docker compose up -d
+
+# 4. Point DNS A record to your server IP
+# Caddy auto-provisions TLS certificates via Let's Encrypt
 ```
 
-Then on your server:
+---
 
-1. **Enable Actions** in Forgejo: Site Administration → Actions → Enable
-2. **Get a registration token**: Site Administration → Actions → Runners → Create new runner
-3. **Set environment variables** (in Coolify or `.env`):
-   ```
-   FORGEJO_INSTANCE=https://your-forgejo-url
-   FORGEJO_RUNNER_TOKEN=your-registration-token
-   ```
-4. **Deploy** — the runner auto-registers on first startup:
-   ```bash
-   docker compose up -d
-   ```
-
-#### Per Function: Set Up Deploy Workflow
+## Container Management
 
 ```bash
-# Inside your function project
-cd my-function
+# List deployed faas containers
+faas container ls
 
-# Forgejo (default)
-faas deploy init
+# Show all containers (not just faas)
+faas container ls --all
 
-# Or GitHub Actions
-faas deploy init --provider github
-```
+# View container logs
+faas container logs my-function
 
-This generates a workflow file that builds and deploys on every push to `main`.
-
-**Forgejo** (`.forgejo/workflows/deploy.yml`):
-
-- Builds the Docker image directly on the host via the runner
-- No registry needed — the runner has Docker socket access
-- Stops the old container and starts the new one on `faas-network`
-
-**GitHub** (`.github/workflows/deploy.yml`):
-
-- Builds and pushes to GitHub Container Registry (ghcr.io)
-- SSHs to your server, pulls the image, and deploys
-- Requires secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`
-
-#### Full Example
-
-```bash
-# Create a function
-faas node my-api
-cd my-api
-
-# Set up deployment
-faas deploy init
-
-# Push to deploy
-git remote add origin http://forgejo.example.com/user/my-api.git
-git add . && git commit -m "init" && git push -u origin main
-
-# Function is now live!
-curl -H "Authorization: Bearer <token>" http://gateway.example.com/my-api
+# Stop a container
+faas container stop my-function
 ```
 
 ### Initialize Existing Project
@@ -271,25 +349,31 @@ faas init --runtime python
 
 ## Commands
 
-| Command                | Description                   |
-| ---------------------- | ----------------------------- |
-| `new <runtime> <name>` | Create a new function project |
-| `init`                 | Initialize existing directory |
-| `dev`                  | Run function locally          |
-| `container ls`         | List deployed containers      |
-| `container logs`       | View container logs           |
-| `container stop`       | Stop a container              |
-| `gateway init`         | Create gateway project        |
-| `gateway build`        | Build gateway image           |
-| `gateway start`        | Start gateway                 |
-| `gateway stop`         | Stop gateway                  |
-| `deploy init`          | Generate deploy workflow      |
-| `deploy runner`        | Generate Forgejo runner setup |
-| `image build`          | Build Docker image            |
-| `image push`           | Push to registry              |
-| `doctor [runtime]`     | Check dependencies            |
-| `install`              | Install faas globally         |
-| `uninstall`            | Remove global installation    |
+| Command                 | Description                   |
+| ----------------------- | ----------------------------- |
+| `new <runtime> <name>`  | Create a new function project |
+| `init`                  | Initialize existing directory |
+| `dev`                   | Run function locally          |
+| `container ls`          | List deployed containers      |
+| `container logs`        | View container logs           |
+| `container stop`        | Stop a container              |
+| `gateway init`          | Create gateway project        |
+| `gateway build`         | Build gateway image           |
+| `gateway start`         | Start gateway                 |
+| `gateway stop`          | Stop gateway                  |
+| `proxy init`            | Create Caddy reverse proxy    |
+| `proxy add <domain>`    | Add domain route              |
+| `proxy remove <domain>` | Remove domain route           |
+| `proxy ls`              | List configured domains       |
+| `deploy setup`          | Guided deploy pipeline setup  |
+| `deploy init`           | Generate deploy workflow      |
+| `deploy runner`         | Generate Forgejo runner setup |
+| `deploy status`         | Check deployment status       |
+| `image build`           | Build Docker image            |
+| `image push`            | Push to registry              |
+| `doctor [runtime]`      | Check dependencies            |
+| `install`               | Install faas globally         |
+| `uninstall`             | Remove global installation    |
 
 ## Options
 
@@ -336,7 +420,8 @@ faas/
 │   │   ├── publish.ts        # Docker build
 │   │   ├── containers.ts     # Container management
 │   │   ├── gateway.ts        # Gateway management
-│   │   ├── deploy.ts         # Deploy workflows (Forgejo/GitHub)
+│   │   ├── proxy.ts          # Caddy proxy management
+│   │   ├── deploy.ts         # Deploy pipelines (Forgejo/GitHub)
 │   │   └── doctor.ts         # Runtime checks
 │   ├── runtimes/
 │   │   ├── base.ts           # Runtime interface
@@ -349,6 +434,45 @@ faas/
 ├── dist/
 │   └── faas                  # Compiled binary
 └── package.json
+```
+
+## Server Setup Checklist
+
+Setting up a fresh server to run FaaS:
+
+```bash
+# 1. Install Docker
+curl -fsSL https://get.docker.com | sh
+
+# 2. Create the Docker network
+docker network create faas-network
+
+# 3. Set up the gateway
+faas gateway init
+cd faas-gateway
+docker build -t faas-gateway .
+docker run -d --name faas-gateway --network faas-network \
+  -p 8080:8080 -e FAAS_AUTH_TOKEN=your-secret \
+  --restart unless-stopped faas-gateway
+cd ..
+
+# 4. Set up the reverse proxy (for HTTPS/domains)
+faas proxy init
+faas proxy add api.example.com
+cd faas-proxy
+docker compose up -d
+cd ..
+
+# 5. Set up the Forgejo runner (for CI/CD)
+faas deploy runner
+cd faas-runner
+cp .env.example .env
+# Edit .env with your Forgejo URL and runner token
+docker compose up -d
+cd ..
+
+# ✅ Server is ready!
+# Now create functions, push to git, and they deploy automatically.
 ```
 
 ## License

@@ -167,6 +167,9 @@ services:
       - FAAS_AUTH_TOKEN=\${FAAS_AUTH_TOKEN:-}
     networks:
       - faas-network
+    restart: unless-stopped
+    labels:
+      - faas.gateway=true
 
 networks:
   faas-network:
@@ -232,6 +235,7 @@ Make sure your function containers:
 docker run -d \\
   --name hello \\
   --network faas-network \\
+  --label faas.fn=true \\
   my-hello-function:latest
 
 # Call it through the gateway
@@ -251,12 +255,34 @@ curl -H "Authorization: Bearer token" http://localhost:8080/hello
 3. Proxies request to \`http://<container-name>:8080/path\` on the Docker network
 4. Returns response from the function container
 
-## Coolify Deployment
+## Production Deployment
 
-1. Create a new service from this Dockerfile
-2. Set the \`FAAS_AUTH_TOKEN\` environment variable in Coolify
-3. Ensure all function containers are on the same Docker network
-4. Point your domain at the gateway service
+Deploy the gateway as a Docker container on your server. For HTTPS and domain management,
+use \`faas proxy init\` to set up a Caddy reverse proxy in front of the gateway.
+
+\`\`\`bash
+# On your server
+docker network create faas-network
+docker build -t faas-gateway .
+docker run -d \\
+  --name faas-gateway \\
+  --network faas-network \\
+  -p 8080:8080 \\
+  -e FAAS_AUTH_TOKEN=your-secret-token \\
+  --restart unless-stopped \\
+  faas-gateway
+\`\`\`
+
+Or use docker-compose:
+
+\`\`\`bash
+# Set your token
+export FAAS_AUTH_TOKEN=your-secret-token
+
+# Create network and start
+docker network create faas-network
+docker compose up -d
+\`\`\`
 `
 
 export interface GatewayOptions {
@@ -387,6 +413,10 @@ export async function gatewayStart(token?: string): Promise<boolean> {
     FAAS_NETWORK,
     '-p',
     '8080:8080',
+    '--label',
+    'faas.gateway=true',
+    '--restart',
+    'unless-stopped',
   ]
 
   if (token) {

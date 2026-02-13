@@ -10,10 +10,11 @@ import { global, uninstall } from './commands/global'
 import { containers } from './commands/containers'
 import { gateway } from './commands/gateway'
 import { deploy } from './commands/deploy'
+import { proxy } from './commands/proxy'
 import { getRuntimeNames } from './runtimes'
 import logger from './utils/logger'
 
-const VERSION = '0.6.12'
+const VERSION = '0.7.0'
 
 // Canonical runtime names only
 const CANONICAL_RUNTIMES = [
@@ -50,8 +51,15 @@ Commands:
   gateway start                   Start gateway
   gateway stop                    Stop gateway
 
+  proxy init                      Create Caddy reverse proxy
+  proxy add <domain>              Add domain route
+  proxy remove <domain>           Remove domain route
+  proxy ls                        List configured domains
+
+  deploy setup                    Guided deploy pipeline setup
   deploy init                     Generate deploy workflow
   deploy runner                   Generate Forgejo runner setup
+  deploy status                   Check deployment status
 
   image build                     Build Docker image
   image push                      Push to registry
@@ -63,19 +71,25 @@ Commands:
 Runtimes:
   ${CANONICAL_RUNTIMES.join(', ')}
 
+Pipeline (git push to prod):
+  1. faas node my-api              Create function
+  2. faas deploy setup             Configure CI/CD pipeline
+  3. git push                      Deploy to production
+  
+  Forgejo (default): push → runner builds image → deploy container → health check
+  GitHub:            push → build & push to GHCR → SSH deploy → health check
+
 Examples:
   faas node hello                 Create Node.js function
   faas new python api             Create Python function
   faas dev                        Run locally
-  faas dev --port 3000            Run on specific port
   faas image build                Build Docker image
-  faas image build --tag v1       Build with custom tag
-  faas image push --registry gcr  Push to registry
-  faas container ls               List containers
+  faas deploy setup               Set up CI/CD pipeline
+  faas deploy status              Check deploy status
+  faas container ls               List running functions
   faas gateway start --token xyz  Start gateway with auth
-  faas deploy init                Setup Forgejo deploy workflow
-  faas deploy init --provider github  Setup GitHub Actions workflow
-  faas deploy runner              Setup Forgejo runner
+  faas proxy init                 Create reverse proxy
+  faas proxy add api.example.com  Add domain route
   faas doctor node                Check Node.js dependencies
 
 Options:
@@ -268,15 +282,38 @@ async function main() {
         break
 
       // ─────────────────────────────────────────────────────────────────
+      // Proxy management: faas proxy <subcommand>
+      // ─────────────────────────────────────────────────────────────────
+
+      case 'proxy':
+        const proxySubcmd = positionalArgs[0]
+        if (!proxySubcmd) {
+          logger.error('Usage: faas proxy <init|add|remove|ls>')
+          logger.info('  init            - Create Caddy proxy setup')
+          logger.info('  add <domain>    - Add domain route')
+          logger.info('  remove <domain> - Remove domain route')
+          logger.info('  ls              - List configured domains')
+          process.exit(1)
+        }
+        const proxySuccess = await proxy(proxySubcmd, {
+          output: options.output as string,
+          domain: positionalArgs[1],
+        })
+        process.exit(proxySuccess ? 0 : 1)
+        break
+
+      // ─────────────────────────────────────────────────────────────────
       // Deploy management: faas deploy <subcommand>
       // ─────────────────────────────────────────────────────────────────
 
       case 'deploy':
         const deploySubcmd = positionalArgs[0]
         if (!deploySubcmd) {
-          logger.error('Usage: faas deploy <init|runner>')
+          logger.error('Usage: faas deploy <setup|init|runner|status>')
+          logger.info('  setup  - Guided deploy pipeline setup')
           logger.info('  init   - Generate deploy workflow (Forgejo or GitHub)')
           logger.info('  runner - Generate Forgejo runner setup')
+          logger.info('  status - Check deployment status')
           process.exit(1)
         }
         const deploySuccess = await deploy(deploySubcmd, {
