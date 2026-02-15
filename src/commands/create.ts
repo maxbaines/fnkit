@@ -134,7 +134,7 @@ export async function create(
   logger.newline()
   logger.info('Next steps:')
   logger.dim(`  cd ${projectName}`)
-  logger.dim('  faas run')
+  logger.dim('  fnkit run')
   logger.newline()
   logger.dim(`Quickstart guide: ${runtime.quickstartUrl}`)
   logger.newline()
@@ -211,9 +211,9 @@ build/
 }
 
 function generateDockerCompose(projectName: string): string {
-  return `# Docker Compose for FaaS function with gateway integration
-# Requires: docker network create faas-network
-# Requires: faas-gateway running (faas gateway init && faas gateway build && faas gateway start)
+  return `# Docker Compose for FnKit function with gateway integration
+# Requires: docker network create fnkit-network
+# Requires: fnkit-gateway running (fnkit gateway init && fnkit gateway build && fnkit gateway start)
 
 version: '3.8'
 
@@ -222,26 +222,26 @@ services:
     build: .
     container_name: ${projectName}
     networks:
-      - faas-network
+      - fnkit-network
     depends_on:
-      faas-gateway:
+      fnkit-gateway:
         condition: service_started
     restart: unless-stopped
 
   # Uncomment to include gateway in this compose file
-  # faas-gateway:
-  #   image: faas-gateway:latest
-  #   container_name: faas-gateway
+  # fnkit-gateway:
+  #   image: fnkit-gateway:latest
+  #   container_name: fnkit-gateway
   #   ports:
   #     - "8080:8080"
   #   environment:
-  #     - FAAS_AUTH_TOKEN=\${FAAS_AUTH_TOKEN:-}
+  #     - FNKIT_AUTH_TOKEN=\${FNKIT_AUTH_TOKEN:-}
   #   networks:
-  #     - faas-network
+  #     - fnkit-network
 
 networks:
-  faas-network:
-    name: faas-network
+  fnkit-network:
+    name: fnkit-network
     external: true
 
 # Usage:

@@ -9,7 +9,7 @@ import { exec } from '../utils/shell'
 // Forgejo Runner setup
 // ─────────────────────────────────────────────────────────────────
 
-const RUNNER_DIR = 'faas-runner'
+const RUNNER_DIR = 'fnkit-runner'
 
 const RUNNER_ENV_EXAMPLE = `# Forgejo Actions Runner — required environment variables
 # Copy to .env and fill in your values
@@ -21,13 +21,13 @@ FORGEJO_INSTANCE=https://git.example.com
 FORGEJO_RUNNER_TOKEN=your-registration-token
 
 # Runner display name (optional)
-FORGEJO_RUNNER_NAME=faas-runner
+FORGEJO_RUNNER_NAME=fnkit-runner
 
 # Runner labels — must match "runs-on" in workflows (optional)
 FORGEJO_RUNNER_LABELS=ubuntu-latest:host
 `
 
-const RUNNER_DOCKER_COMPOSE = `# Forgejo Actions Runner for FaaS deployments
+const RUNNER_DOCKER_COMPOSE = `# Forgejo Actions Runner for FnKit deployments
 # Docker socket access allows the runner to build and deploy function containers
 #
 # Setup:
@@ -48,7 +48,7 @@ services:
       - DOCKER_HOST=unix:///var/run/docker.sock
       - FORGEJO_INSTANCE=\${FORGEJO_INSTANCE}
       - FORGEJO_RUNNER_TOKEN=\${FORGEJO_RUNNER_TOKEN}
-      - FORGEJO_RUNNER_NAME=\${FORGEJO_RUNNER_NAME:-faas-runner}
+      - FORGEJO_RUNNER_NAME=\${FORGEJO_RUNNER_NAME:-fnkit-runner}
       - FORGEJO_RUNNER_LABELS=\${FORGEJO_RUNNER_LABELS:-ubuntu-latest:host}
     entrypoint: /bin/sh
     command:
@@ -81,9 +81,9 @@ volumes:
   runner-data:
 `
 
-const RUNNER_README = `# FaaS Forgejo Runner
+const RUNNER_README = `# FnKit Forgejo Runner
 
-Forgejo Actions runner for deploying FaaS function containers. Auto-registers on first startup — just set the environment variables and deploy.
+Forgejo Actions runner for deploying FnKit function containers. Auto-registers on first startup — just set the environment variables and deploy.
 
 ## Quick Start
 
@@ -111,7 +111,7 @@ docker logs forgejo-runner
 |----------|----------|-------------|
 | \`FORGEJO_INSTANCE\` | ✅ | Your Forgejo URL (e.g. \`https://git.example.com\`) |
 | \`FORGEJO_RUNNER_TOKEN\` | ✅ | Registration token from step 2 |
-| \`FORGEJO_RUNNER_NAME\` | | Runner name (default: \`faas-runner\`) |
+| \`FORGEJO_RUNNER_NAME\` | | Runner name (default: \`fnkit-runner\`) |
 | \`FORGEJO_RUNNER_LABELS\` | | Runner labels (default: \`ubuntu-latest:host\`) |
 
 4. **Start** — \`docker compose up -d\`
@@ -127,7 +127,7 @@ The runner mounts the host Docker socket (\`/var/run/docker.sock\`), so workflow
 ## Notes
 
 - The runner label \`ubuntu-latest\` is used in workflow files (\`runs-on: ubuntu-latest\`)
-- Function containers are deployed to the \`faas-network\` Docker network
+- Function containers are deployed to the \`fnkit-network\` Docker network
 - Registration persists in the \`runner-data\` volume — survives restarts and redeployments
 - The healthcheck monitors the runner daemon process
 `
@@ -137,9 +137,9 @@ The runner mounts the host Docker socket (\`/var/run/docker.sock\`), so workflow
 // ─────────────────────────────────────────────────────────────────
 
 function generateForgejoWorkflow(functionName: string): string {
-  return `# FaaS Deploy — Forgejo Actions
+  return `# FnKit Deploy — Forgejo Actions
 # Builds and deploys this function container on every push to main
-# Requires: Forgejo runner with Docker socket access (faas deploy runner)
+# Requires: Forgejo runner with Docker socket access (fnkit deploy runner)
 #
 # Pipeline: git push → build image → deploy container → health check
 
@@ -156,8 +156,8 @@ jobs:
       - name: Build image
         run: |
           FUNCTION_NAME="${functionName}"
-          IMAGE_NAME="faas-fn-\${FUNCTION_NAME}:latest"
-          IMAGE_PREV="faas-fn-\${FUNCTION_NAME}:prev"
+          IMAGE_NAME="fnkit-fn-\${FUNCTION_NAME}:latest"
+          IMAGE_PREV="fnkit-fn-\${FUNCTION_NAME}:prev"
 
           echo "🔨 Building \${FUNCTION_NAME}..."
           docker build -t \$IMAGE_NAME .
@@ -168,8 +168,8 @@ jobs:
 
       - name: Deploy container
         run: |
-          echo "🌐 Ensuring faas-network exists..."
-          docker network create faas-network 2>/dev/null || true
+          echo "🌐 Ensuring fnkit-network exists..."
+          docker network create fnkit-network 2>/dev/null || true
 
           # Tag current image as :prev for rollback
           docker tag \$IMAGE_NAME \$IMAGE_PREV 2>/dev/null || true
@@ -181,9 +181,9 @@ jobs:
           echo "🚀 Starting \${FUNCTION_NAME}..."
           docker run -d \\
             --name \$FUNCTION_NAME \\
-            --network faas-network \\
-            --label faas.fn=true \\
-            --label faas.deployed="\$(date -u +%Y-%m-%dT%H:%M:%SZ)" \\
+            --network fnkit-network \\
+            --label fnkit.fn=true \\
+            --label fnkit.deployed="\$(date -u +%Y-%m-%dT%H:%M:%SZ)" \\
             --restart unless-stopped \\
             \$IMAGE_NAME
 
@@ -205,10 +205,10 @@ jobs:
               docker rm \$FUNCTION_NAME 2>/dev/null || true
               docker run -d \\
                 --name \$FUNCTION_NAME \\
-                --network faas-network \\
-                --label faas.fn=true \\
-                --label faas.deployed="\$(date -u +%Y-%m-%dT%H:%M:%SZ)" \\
-                --label faas.rollback=true \\
+                --network fnkit-network \\
+                --label fnkit.fn=true \\
+                --label fnkit.deployed="\$(date -u +%Y-%m-%dT%H:%M:%SZ)" \\
+                --label fnkit.rollback=true \\
                 --restart unless-stopped \\
                 \$IMAGE_PREV
               echo "⚠️  Rolled back to previous version"
@@ -219,7 +219,7 @@ jobs:
       - name: Cleanup old images
         run: |
           echo "🧹 Cleaning up dangling images..."
-          docker image prune -f --filter "label=faas.fn=true" 2>/dev/null || true
+          docker image prune -f --filter "label=fnkit.fn=true" 2>/dev/null || true
 `
 }
 
@@ -228,7 +228,7 @@ jobs:
 // ─────────────────────────────────────────────────────────────────
 
 function generateGitHubWorkflow(functionName: string): string {
-  return `# FaaS Deploy — GitHub Actions
+  return `# FnKit Deploy — GitHub Actions
 # Builds image, pushes to GHCR, and deploys to remote server via SSH
 #
 # Pipeline: git push → build & push to GHCR → SSH deploy → health check
@@ -290,8 +290,8 @@ jobs:
             echo "📦 Pulling \$IMAGE..."
             docker pull \$IMAGE
 
-            echo "🌐 Ensuring faas-network exists..."
-            docker network create faas-network 2>/dev/null || true
+            echo "🌐 Ensuring fnkit-network exists..."
+            docker network create fnkit-network 2>/dev/null || true
 
             echo "♻️  Replacing running container..."
             docker stop \${{ env.FUNCTION_NAME }} 2>/dev/null || true
@@ -300,9 +300,9 @@ jobs:
             echo "🚀 Starting \${{ env.FUNCTION_NAME }}..."
             docker run -d \\
               --name \${{ env.FUNCTION_NAME }} \\
-              --network faas-network \\
-              --label faas.fn=true \\
-              --label faas.deployed="\$(date -u +%Y-%m-%dT%H:%M:%SZ)" \\
+              --network fnkit-network \\
+              --label fnkit.fn=true \\
+              --label fnkit.deployed="\$(date -u +%Y-%m-%dT%H:%M:%SZ)" \\
               --restart unless-stopped \\
               \$IMAGE
 
@@ -383,7 +383,7 @@ export async function deployInit(
     logger.info('How it works:')
     logger.dim('  1. Push to main branch')
     logger.dim('  2. Forgejo runner builds the Docker image on the host')
-    logger.dim(`  3. Container "${projectName}" deploys to faas-network`)
+    logger.dim(`  3. Container "${projectName}" deploys to fnkit-network`)
     logger.dim('  4. Health check verifies the container is running')
     logger.dim('  5. Auto-rollback to previous image on failure')
     logger.dim(`  6. Available at gateway: /${projectName}`)
@@ -391,7 +391,7 @@ export async function deployInit(
     logger.info('Prerequisites:')
     logger.dim('  - Forgejo Actions enabled on your instance')
     logger.dim(
-      '  - Forgejo runner with Docker socket access (faas deploy runner)',
+      '  - Forgejo runner with Docker socket access (fnkit deploy runner)',
     )
     logger.newline()
     logger.info('Deploy now:')
@@ -414,7 +414,7 @@ export async function deployInit(
     logger.dim('  1. Push to main branch')
     logger.dim('  2. GitHub Actions builds image, pushes to ghcr.io')
     logger.dim(
-      `  3. SSHs to server, pulls image, deploys "${projectName}" to faas-network`,
+      `  3. SSHs to server, pulls image, deploys "${projectName}" to fnkit-network`,
     )
     logger.dim('  4. Health check verifies the container is running')
     logger.dim(`  5. Available at gateway: /${projectName}`)
@@ -505,7 +505,7 @@ export async function deploySetup(
   const projectDir = resolve(process.cwd())
   const projectName = basename(projectDir)
 
-  logger.title('FaaS Deploy Setup')
+  logger.title('FnKit Deploy Setup')
 
   // Check prerequisites
   logger.info('Checking prerequisites...')
@@ -535,7 +535,7 @@ export async function deploySetup(
   // Check for Dockerfile
   if (!existsSync(join(projectDir, 'Dockerfile'))) {
     logger.error('No Dockerfile found')
-    logger.info('Run "faas init" to generate a Dockerfile for your project')
+    logger.info('Run "fnkit init" to generate a Dockerfile for your project')
     return false
   }
   logger.success('Dockerfile found')
@@ -598,7 +598,7 @@ export async function deploySetup(
   if (provider === 'forgejo') {
     console.log(`   ${hasRemote ? '✅' : '⬜'} Git remote configured`)
     console.log('   ✅ Deploy workflow created')
-    console.log('   ⬜ Forgejo runner deployed (faas deploy runner)')
+    console.log('   ⬜ Forgejo runner deployed (fnkit deploy runner)')
     console.log('   ⬜ Push to main to deploy')
   } else {
     console.log(`   ${hasRemote ? '✅' : '⬜'} Git remote configured`)
@@ -635,7 +635,9 @@ export async function deployStatus(): Promise<boolean> {
     logger.success('Pipeline: GitHub Actions')
   } else {
     logger.warn('No deploy pipeline configured')
-    logger.info('Run "faas deploy init" or "faas deploy setup" to set up CI/CD')
+    logger.info(
+      'Run "fnkit deploy init" or "fnkit deploy setup" to set up CI/CD',
+    )
     return true
   }
 
@@ -705,7 +707,7 @@ export async function deployStatus(): Promise<boolean> {
       const labelResult = await exec('docker', [
         'inspect',
         '--format',
-        '{{index .Config.Labels "faas.deployed"}}',
+        '{{index .Config.Labels "fnkit.deployed"}}',
         projectName,
       ])
       if (labelResult.success && labelResult.stdout.trim()) {
@@ -737,18 +739,20 @@ export async function deploy(
       logger.error(`Unknown deploy command: ${subcommand}`)
       logger.info('Available commands: init, runner, setup, status')
       logger.newline()
-      logger.dim('  faas deploy setup                  — Guided pipeline setup')
       logger.dim(
-        '  faas deploy init                   — Generate deploy workflow (Forgejo)',
+        '  fnkit deploy setup                  — Guided pipeline setup',
       )
       logger.dim(
-        '  faas deploy init --provider github — Generate deploy workflow (GitHub)',
+        '  fnkit deploy init                   — Generate deploy workflow (Forgejo)',
       )
       logger.dim(
-        '  faas deploy runner                 — Generate Forgejo runner setup',
+        '  fnkit deploy init --provider github — Generate deploy workflow (GitHub)',
       )
       logger.dim(
-        '  faas deploy status                 — Check deployment status',
+        '  fnkit deploy runner                 — Generate Forgejo runner setup',
+      )
+      logger.dim(
+        '  fnkit deploy status                 — Check deployment status',
       )
       return false
   }

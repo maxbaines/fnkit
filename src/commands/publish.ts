@@ -22,7 +22,7 @@ export async function publish(options: PublishOptions = {}): Promise<boolean> {
   const dockerfilePath = `${projectDir}/Dockerfile`
   if (!existsSync(dockerfilePath)) {
     logger.error('No Dockerfile found in project directory')
-    logger.info('Run "faas init" to generate a Dockerfile for your project')
+    logger.info('Run "fnkit init" to generate a Dockerfile for your project')
     return false
   }
 
@@ -42,7 +42,7 @@ export async function publish(options: PublishOptions = {}): Promise<boolean> {
   logger.success('Docker is available')
 
   // Determine tag
-  const tag = options.tag || `faas-fn-${projectName}:latest`
+  const tag = options.tag || `fnkit-fn-${projectName}:latest`
   const fullTag = options.registry ? `${options.registry}/${tag}` : tag
 
   // Build with Docker
@@ -73,7 +73,7 @@ export async function publish(options: PublishOptions = {}): Promise<boolean> {
   logger.newline()
   logger.info('Run with gateway (recommended):')
   logger.dim(
-    `  docker run -d --name ${projectName} --network faas-network --label faas.fn=true ${fullTag}`,
+    `  docker run -d --name ${projectName} --network fnkit-network --label fnkit.fn=true ${fullTag}`,
   )
   logger.dim(
     `  curl -H "Authorization: Bearer <token>" http://localhost:8080/${projectName}`,

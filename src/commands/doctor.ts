@@ -7,7 +7,7 @@ import { getAllRuntimes, getRuntime } from '../runtimes'
 import type { Runtime } from '../runtimes'
 
 export async function doctor(runtimeName?: string): Promise<boolean> {
-  logger.title('FAAS Doctor')
+  logger.title('FNKIT Doctor')
 
   let allGood = true
 

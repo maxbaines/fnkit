@@ -29,9 +29,9 @@ jobs:
 
       - name: Test CLI
         run: |
-          ./dist/faas --version
-          ./dist/faas help
-          ./dist/faas doctor
+          ./dist/fnkit --version
+          ./dist/fnkit help
+          ./dist/fnkit doctor
 
   build-matrix:
     strategy:
@@ -55,5 +55,5 @@ jobs:
         run: bun run build
 
       - name: Test binary
-        run: ./dist/faas --version
+        run: ./dist/fnkit --version
         shell: bash

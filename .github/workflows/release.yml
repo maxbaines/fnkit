@@ -13,19 +13,19 @@ jobs:
         include:
           - os: ubuntu-latest
             target: bun-linux-x64
-            artifact: faas-linux-x64
+            artifact: fnkit-linux-x64
           - os: ubuntu-latest
             target: bun-linux-arm64
-            artifact: faas-linux-arm64
+            artifact: fnkit-linux-arm64
           - os: macos-latest
             target: bun-darwin-x64
-            artifact: faas-macos-x64
+            artifact: fnkit-macos-x64
           - os: macos-latest
             target: bun-darwin-arm64
-            artifact: faas-macos-arm64
+            artifact: fnkit-macos-arm64
           - os: windows-latest
             target: bun-windows-x64
-            artifact: faas-windows-x64.exe
+            artifact: fnkit-windows-x64.exe
 
     runs-on: ${{ matrix.os }}
 
@@ -66,11 +66,11 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            ./artifacts/faas-linux-x64/faas-linux-x64
-            ./artifacts/faas-linux-arm64/faas-linux-arm64
-            ./artifacts/faas-macos-x64/faas-macos-x64
-            ./artifacts/faas-macos-arm64/faas-macos-arm64
-            ./artifacts/faas-windows-x64.exe/faas-windows-x64.exe
+            ./artifacts/fnkit-linux-x64/fnkit-linux-x64
+            ./artifacts/fnkit-linux-arm64/fnkit-linux-arm64
+            ./artifacts/fnkit-macos-x64/fnkit-macos-x64
+            ./artifacts/fnkit-macos-arm64/fnkit-macos-arm64
+            ./artifacts/fnkit-windows-x64.exe/fnkit-windows-x64.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

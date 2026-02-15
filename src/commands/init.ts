@@ -30,7 +30,7 @@ export async function init(options: InitOptions = {}): Promise<boolean> {
     runtime = await detectRuntime(projectDir)
     if (!runtime) {
       logger.error('Could not auto-detect runtime')
-      logger.info('Specify runtime with: faas init --runtime <runtime>')
+      logger.info('Specify runtime with: fnkit init --runtime <runtime>')
       logger.info(
         'Available: nodejs, python, go, java, ruby, dotnet, php, dart, cpp',
       )
@@ -81,8 +81,8 @@ export async function init(options: InitOptions = {}): Promise<boolean> {
   logger.success('Function initialized!')
   logger.newline()
   logger.info('Next steps:')
-  logger.dim('  faas run      # Run locally')
-  logger.dim('  faas publish  # Build Docker container')
+  logger.dim('  fnkit run      # Run locally')
+  logger.dim('  fnkit publish  # Build Docker container')
   logger.newline()
 
   return true

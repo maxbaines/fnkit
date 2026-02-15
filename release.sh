@@ -1,5 +1,5 @@
 #!/bin/bash
-# Release script for FAAS CLI
+# Release script for FNKIT CLI
 # Usage: ./release.sh [major|minor|patch] or ./release.sh v1.2.3
 
 set -e
@@ -92,4 +92,4 @@ echo ""
 echo -e "${GREEN}✓ Released ${TAG}!${NC}"
 echo ""
 echo "GitHub Actions will now build binaries for all platforms."
-echo "Check the release at: https://github.com/maxbaines/faas/releases/tag/${TAG}"
+echo "Check the release at: https://github.com/maxbaines/fnkit/releases/tag/${TAG}"

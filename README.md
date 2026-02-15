@@ -1,11 +1,11 @@
-# FAAS CLI
+# FNKIT CLI
 
 A command-line tool for scaffolding and deploying serverless functions using the [Google Cloud Functions Framework](https://github.com/GoogleCloudPlatform/functions-framework). Git push to deploy — no external platforms required.
 
 ## Architecture
 
 ```
-Internet → Caddy (TLS/domains) → faas-gateway (auth/routing) → Function containers
+Internet → Caddy (TLS/domains) → fnkit-gateway (auth/routing) → Function containers
                                                                     ↑
                                                     Forgejo/GitHub Actions
                                                     (git push → docker build → deploy)
@@ -17,11 +17,11 @@ Internet → Caddy (TLS/domains) → faas-gateway (auth/routing) → Function co
 
 ```bash
 # Create a function
-faas node my-api
+fnkit node my-api
 cd my-api
 
 # Set up CI/CD pipeline
-faas deploy setup
+fnkit deploy setup
 
 # Push to deploy
 git add . && git commit -m "init" && git push
@@ -33,28 +33,28 @@ git add . && git commit -m "init" && git push
 
 ### From Binary
 
-Download the pre-built binary for your platform from the [releases page](https://github.com/maxbaines/faas/releases).
+Download the pre-built binary for your platform from the [releases page](https://github.com/maxbaines/fnkit/releases).
 
 ```bash
 # macOS (Apple Silicon)
-curl -L https://github.com/maxbaines/faas/releases/latest/download/faas-macos-arm64 -o faas
-chmod +x faas && ./faas install
+curl -L https://github.com/maxbaines/fnkit/releases/latest/download/fnkit-macos-arm64 -o fnkit
+chmod +x fnkit && ./fnkit install
 
 # macOS (Intel)
-curl -L https://github.com/maxbaines/faas/releases/latest/download/faas-macos-x64 -o faas
-chmod +x faas && ./faas install
+curl -L https://github.com/maxbaines/fnkit/releases/latest/download/fnkit-macos-x64 -o fnkit
+chmod +x fnkit && ./fnkit install
 
 # Linux (x64)
-curl -L https://github.com/maxbaines/faas/releases/latest/download/faas-linux-x64 -o faas
-chmod +x faas && ./faas install
+curl -L https://github.com/maxbaines/fnkit/releases/latest/download/fnkit-linux-x64 -o fnkit
+chmod +x fnkit && ./fnkit install
 
 # Linux (ARM64)
-curl -L https://github.com/maxbaines/faas/releases/latest/download/faas-linux-arm64 -o faas
-chmod +x faas && ./faas install
+curl -L https://github.com/maxbaines/fnkit/releases/latest/download/fnkit-linux-arm64 -o fnkit
+chmod +x fnkit && ./fnkit install
 
 # Windows (PowerShell as Administrator)
-Invoke-WebRequest -Uri https://github.com/maxbaines/faas/releases/latest/download/faas-windows-x64.exe -OutFile faas.exe
-.\faas.exe install
+Invoke-WebRequest -Uri https://github.com/maxbaines/fnkit/releases/latest/download/fnkit-windows-x64.exe -OutFile fnkit.exe
+.\fnkit.exe install
 ```
 
 ### From Source
@@ -62,11 +62,11 @@ Invoke-WebRequest -Uri https://github.com/maxbaines/faas/releases/latest/downloa
 Requires [Bun](https://bun.sh) to be installed.
 
 ```bash
-git clone https://github.com/maxbaines/faas.git
-cd faas
+git clone https://github.com/maxbaines/fnkit.git
+cd fnkit
 bun install
 bun run build
-# Binary is now at ./dist/faas
+# Binary is now at ./dist/fnkit
 ```
 
 ---
@@ -77,45 +77,45 @@ bun run build
 
 ```bash
 # Create a new function (shorthand)
-faas node hello
-faas python myfunction
-faas go my-api
+fnkit node hello
+fnkit python myfunction
+fnkit go my-api
 
 # Or use the explicit form
-faas new <runtime> <name>
+fnkit new <runtime> <name>
 
 # With a git remote
-faas node hello --remote git@github.com:user/hello.git
+fnkit node hello --remote git@github.com:user/hello.git
 
 # Initialize an existing directory
-faas init
-faas init --runtime python
+fnkit init
+fnkit init --runtime python
 
 # Run locally
-faas dev
-faas dev --port 3000 --target myFunction
+fnkit dev
+fnkit dev --port 3000 --target myFunction
 ```
 
-### Container Management — `faas container`
+### Container Management — `fnkit container`
 
 Manage your deployed function containers.
 
 ```bash
-faas container ls               # List deployed faas containers
-faas container ls --all         # Include non-faas containers
-faas container logs my-api      # Tail logs (live)
-faas container stop my-api      # Stop a container
+fnkit container ls               # List deployed fnkit containers
+fnkit container ls --all         # Include non-fnkit containers
+fnkit container logs my-api      # Tail logs (live)
+fnkit container stop my-api      # Stop a container
 ```
 
-### API Gateway — `faas gateway`
+### API Gateway — `fnkit gateway`
 
 Centralized token authentication and routing for all function containers via nginx, with a built-in Bun-based orchestrator for multi-function pipelines.
 
 ```bash
-faas gateway init               # Create gateway project files
-faas gateway build              # Build the gateway Docker image
-faas gateway start --token xyz  # Start with auth token
-faas gateway stop               # Stop the gateway
+fnkit gateway init               # Create gateway project files
+fnkit gateway build              # Build the gateway Docker image
+fnkit gateway start --token xyz  # Start with auth token
+fnkit gateway stop               # Stop the gateway
 ```
 
 **How it works:**
@@ -135,27 +135,27 @@ curl -H "Authorization: Bearer your-token" http://localhost:8080/my-function/api
 curl http://localhost:8080/health
 ```
 
-#### Orchestrator — `faas gateway orchestrate`
+#### Orchestrator — `fnkit gateway orchestrate`
 
 Define multi-function pipelines that call several functions in a single request — either **sequentially** (chaining output → input) or in **parallel** (fan-out, merge results). Pipeline configs are stored in an S3-compatible bucket (MinIO, Garage, AWS S3).
 
 ```bash
 # Configure S3/MinIO bucket for pipeline storage
-faas gateway orchestrate init --s3-bucket faas-pipelines --s3-endpoint http://localhost:9000
+fnkit gateway orchestrate init --s3-bucket fnkit-pipelines --s3-endpoint http://localhost:9000
 
 # Add a sequential pipeline (each step gets previous output)
-faas gateway orchestrate add process-order \
+fnkit gateway orchestrate add process-order \
   --steps validate-order,charge-payment,send-email \
   --mode sequential
 
 # Add a parallel pipeline (all steps called simultaneously, results merged)
-faas gateway orchestrate add enrich-user \
+fnkit gateway orchestrate add enrich-user \
   --steps get-profile,get-preferences,get-history \
   --mode parallel
 
 # List & manage pipelines
-faas gateway orchestrate ls
-faas gateway orchestrate remove process-order
+fnkit gateway orchestrate ls
+fnkit gateway orchestrate remove process-order
 ```
 
 **Calling pipelines:**
@@ -185,8 +185,8 @@ curl -H "Authorization: Bearer token" \
 **Starting the gateway with S3 credentials:**
 
 ```bash
-faas gateway start --token secret \
-  --s3-bucket faas-pipelines \
+fnkit gateway start --token secret \
+  --s3-bucket fnkit-pipelines \
   --s3-endpoint http://minio:9000 \
   --s3-access-key minioadmin \
   --s3-secret-key minioadmin
@@ -204,15 +204,15 @@ Request → nginx (port 8080)
   └── /<name>/*            → proxy to container (existing behavior)
 ```
 
-### Reverse Proxy — `faas proxy`
+### Reverse Proxy — `fnkit proxy`
 
 Automatic HTTPS and domain management via Caddy with Let's Encrypt.
 
 ```bash
-faas proxy init                 # Create Caddy proxy setup
-faas proxy add api.example.com  # Add domain route to gateway
-faas proxy ls                   # List configured domains
-faas proxy remove api.example.com
+fnkit proxy init                 # Create Caddy proxy setup
+fnkit proxy add api.example.com  # Add domain route to gateway
+fnkit proxy ls                   # List configured domains
+fnkit proxy remove api.example.com
 ```
 
 **Architecture:**
@@ -221,7 +221,7 @@ faas proxy remove api.example.com
 Internet → Caddy (443, auto-TLS) → Gateway (8080, auth) → Function containers
 ```
 
-### Deploy Pipeline — `faas deploy`
+### Deploy Pipeline — `fnkit deploy`
 
 Automated git-push-to-deploy via Forgejo (default) or GitHub Actions.
 
@@ -231,11 +231,11 @@ GitHub:   push → build & push to GHCR → SSH deploy → health check
 ```
 
 ```bash
-faas deploy setup               # Interactive setup wizard (recommended)
-faas deploy init                # Generate Forgejo workflow
-faas deploy init --provider github  # Generate GitHub Actions workflow
-faas deploy runner              # Generate Forgejo runner setup files
-faas deploy status              # Check pipeline & container status
+fnkit deploy setup               # Interactive setup wizard (recommended)
+fnkit deploy init                # Generate Forgejo workflow
+fnkit deploy init --provider github  # Generate GitHub Actions workflow
+fnkit deploy runner              # Generate Forgejo runner setup files
+fnkit deploy status              # Check pipeline & container status
 ```
 
 #### Forgejo Runner Setup
@@ -243,8 +243,8 @@ faas deploy status              # Check pipeline & container status
 The runner executes CI workflows and needs Docker socket access to build/deploy on the host.
 
 ```bash
-faas deploy runner
-# → Creates faas-runner/ with docker-compose.yml, .env.example, and README
+fnkit deploy runner
+# → Creates fnkit-runner/ with docker-compose.yml, .env.example, and README
 ```
 
 Then on your server:
@@ -255,23 +255,23 @@ Then on your server:
 4. **Start**: `docker compose up -d`
 5. **Verify**: Check Forgejo Admin → Runners — should appear as online
 
-### Docker Images — `faas image`
+### Docker Images — `fnkit image`
 
 Build and push Docker images for your functions.
 
 ```bash
-faas image build                # Build with default tag
-faas image build --tag myapp:v1 # Build with custom tag
-faas image push --registry ghcr.io  # Build and push to registry
+fnkit image build                # Build with default tag
+fnkit image build --tag myapp:v1 # Build with custom tag
+fnkit image push --registry ghcr.io  # Build and push to registry
 ```
 
 ### Utilities
 
 ```bash
-faas doctor                     # Check all runtime dependencies
-faas doctor node                # Check specific runtime
-faas install                    # Install faas to /usr/local/bin
-faas uninstall                  # Remove global installation
+fnkit doctor                     # Check all runtime dependencies
+fnkit doctor node                # Check specific runtime
+fnkit install                    # Install fnkit to /usr/local/bin
+fnkit uninstall                  # Remove global installation
 ```
 
 ---
@@ -294,76 +294,76 @@ faas uninstall                  # Remove global installation
 
 ## Command Reference
 
-Run `faas <command>` with no subcommand to see detailed help for any group.
+Run `fnkit <command>` with no subcommand to see detailed help for any group.
 
-| Command                                  | Description                       |
-| ---------------------------------------- | --------------------------------- |
-| **Create & Develop**                     |                                   |
-| `faas new <runtime> <name>`              | Create a new function project     |
-| `faas <runtime> <name>`                  | Shorthand for `new`               |
-| `faas init`                              | Initialize existing directory     |
-| `faas dev`                               | Run function locally              |
-| **Containers**                           |                                   |
-| `faas container ls`                      | List deployed containers          |
-| `faas container logs <name>`             | View container logs               |
-| `faas container stop <name>`             | Stop a container                  |
-| **Gateway**                              |                                   |
-| `faas gateway init`                      | Create gateway project            |
-| `faas gateway build`                     | Build gateway image               |
-| `faas gateway start`                     | Start gateway                     |
-| `faas gateway stop`                      | Stop gateway                      |
-| `faas gateway orchestrate init`          | Configure S3 bucket for pipelines |
-| `faas gateway orchestrate add <name>`    | Add a pipeline to S3              |
-| `faas gateway orchestrate ls`            | List defined pipelines            |
-| `faas gateway orchestrate remove <name>` | Remove a pipeline                 |
-| **Proxy**                                |                                   |
-| `faas proxy init`                        | Create Caddy reverse proxy        |
-| `faas proxy add <domain>`                | Add domain route                  |
-| `faas proxy remove <domain>`             | Remove domain route               |
-| `faas proxy ls`                          | List configured domains           |
-| **Deploy**                               |                                   |
-| `faas deploy setup`                      | Guided deploy pipeline setup      |
-| `faas deploy init`                       | Generate deploy workflow          |
-| `faas deploy runner`                     | Generate Forgejo runner setup     |
-| `faas deploy status`                     | Check deployment status           |
-| **Images**                               |                                   |
-| `faas image build`                       | Build Docker image                |
-| `faas image push`                        | Push to registry                  |
-| **Utilities**                            |                                   |
-| `faas doctor [runtime]`                  | Check dependencies                |
-| `faas install`                           | Install faas globally             |
-| `faas uninstall`                         | Remove global installation        |
+| Command                                   | Description                       |
+| ----------------------------------------- | --------------------------------- |
+| **Create & Develop**                      |                                   |
+| `fnkit new <runtime> <name>`              | Create a new function project     |
+| `fnkit <runtime> <name>`                  | Shorthand for `new`               |
+| `fnkit init`                              | Initialize existing directory     |
+| `fnkit dev`                               | Run function locally              |
+| **Containers**                            |                                   |
+| `fnkit container ls`                      | List deployed containers          |
+| `fnkit container logs <name>`             | View container logs               |
+| `fnkit container stop <name>`             | Stop a container                  |
+| **Gateway**                               |                                   |
+| `fnkit gateway init`                      | Create gateway project            |
+| `fnkit gateway build`                     | Build gateway image               |
+| `fnkit gateway start`                     | Start gateway                     |
+| `fnkit gateway stop`                      | Stop gateway                      |
+| `fnkit gateway orchestrate init`          | Configure S3 bucket for pipelines |
+| `fnkit gateway orchestrate add <name>`    | Add a pipeline to S3              |
+| `fnkit gateway orchestrate ls`            | List defined pipelines            |
+| `fnkit gateway orchestrate remove <name>` | Remove a pipeline                 |
+| **Proxy**                                 |                                   |
+| `fnkit proxy init`                        | Create Caddy reverse proxy        |
+| `fnkit proxy add <domain>`                | Add domain route                  |
+| `fnkit proxy remove <domain>`             | Remove domain route               |
+| `fnkit proxy ls`                          | List configured domains           |
+| **Deploy**                                |                                   |
+| `fnkit deploy setup`                      | Guided deploy pipeline setup      |
+| `fnkit deploy init`                       | Generate deploy workflow          |
+| `fnkit deploy runner`                     | Generate Forgejo runner setup     |
+| `fnkit deploy status`                     | Check deployment status           |
+| **Images**                                |                                   |
+| `fnkit image build`                       | Build Docker image                |
+| `fnkit image push`                        | Push to registry                  |
+| **Utilities**                             |                                   |
+| `fnkit doctor [runtime]`                  | Check dependencies                |
+| `fnkit install`                           | Install fnkit globally            |
+| `fnkit uninstall`                         | Remove global installation        |
 
 ---
 
 ## Server Setup Checklist
 
-Setting up a fresh server to run FaaS:
+Setting up a fresh server to run FnKit:
 
 ```bash
 # 1. Install Docker
 curl -fsSL https://get.docker.com | sh
 
 # 2. Create the Docker network
-docker network create faas-network
+docker network create fnkit-network
 
 # 3. Set up the gateway
-faas gateway init
-cd faas-gateway
-faas gateway build
-faas gateway start --token your-secret-token
+fnkit gateway init
+cd fnkit-gateway
+fnkit gateway build
+fnkit gateway start --token your-secret-token
 cd ..
 
 # 4. Set up the reverse proxy (for HTTPS/domains)
-faas proxy init
-faas proxy add api.example.com
-cd faas-proxy
+fnkit proxy init
+fnkit proxy add api.example.com
+cd fnkit-proxy
 docker compose up -d
 cd ..
 
 # 5. Set up the Forgejo runner (for CI/CD)
-faas deploy runner
-cd faas-runner
+fnkit deploy runner
+cd fnkit-runner
 cp .env.example .env
 # Edit .env with your Forgejo URL and runner token
 docker compose up -d
@@ -393,7 +393,7 @@ bun run typecheck
 ## Project Structure
 
 ```
-faas/
+fnkit/
 ├── src/
 │   ├── index.ts              # CLI entry point & help system
 │   ├── commands/
@@ -416,7 +416,7 @@ faas/
 │       ├── logger.ts         # Colored output
 │       └── shell.ts          # Command execution
 ├── dist/
-│   └── faas                  # Compiled binary
+│   └── fnkit                 # Compiled binary
 └── package.json
 ```
 

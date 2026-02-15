@@ -1,19 +1,19 @@
 {
-  "name": "faas",
+  "name": "fnkit",
   "version": "0.7.2",
-  "description": "Functions as a Service CLI - scaffold and deploy serverless functions",
+  "description": "Functions as a Service CLI - scaffold and deploy serverless functions without the netes",
   "module": "src/index.ts",
   "type": "module",
   "bin": {
-    "faas": "./dist/faas"
+    "fnkit": "./dist/fnkit"
   },
   "scripts": {
     "dev": "bun run src/index.ts",
-    "build": "bun build ./src/index.ts --compile --outfile ./dist/faas",
+    "build": "bun build ./src/index.ts --compile --outfile ./dist/fnkit",
     "build:all": "bun run build:macos && bun run build:linux && bun run build:windows",
-    "build:macos": "bun build ./src/index.ts --compile --target=bun-darwin-arm64 --outfile ./dist/faas-macos-arm64",
-    "build:linux": "bun build ./src/index.ts --compile --target=bun-linux-x64 --outfile ./dist/faas-linux-x64",
-    "build:windows": "bun build ./src/index.ts --compile --target=bun-windows-x64 --outfile ./dist/faas-windows-x64.exe",
+    "build:macos": "bun build ./src/index.ts --compile --target=bun-darwin-arm64 --outfile ./dist/fnkit-macos-arm64",
+    "build:linux": "bun build ./src/index.ts --compile --target=bun-linux-x64 --outfile ./dist/fnkit-linux-x64",
+    "build:windows": "bun build ./src/index.ts --compile --target=bun-windows-x64 --outfile ./dist/fnkit-windows-x64.exe",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -23,7 +23,7 @@
     "typescript": "^5.0.0"
   },
   "keywords": [
-    "faas",
+    "fnkit",
     "functions",
     "serverless",
     "google-cloud",

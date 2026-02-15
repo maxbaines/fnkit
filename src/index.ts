@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// FAAS CLI - Functions as a Service scaffolding tool
+// FNKIT CLI - Functions as a Service scaffolding tool
 
 import { create } from './commands/create'
 import { publish } from './commands/publish'
@@ -30,11 +30,11 @@ const CANONICAL_RUNTIMES = [
 
 function showHelp() {
   console.log(`
-faas v${VERSION} — Functions as a Service CLI
+fnkit v${VERSION} — Functions as a Service CLI
 
 Usage:
-  faas <command> [options]
-  faas <runtime> <name>              Quick create (shorthand for 'new')
+  fnkit <command> [options]
+  fnkit <runtime> <name>              Quick create (shorthand for 'new')
 
 Commands:
   new <runtime> <name>               Create a new function project
@@ -48,53 +48,53 @@ Commands:
   image ...                          Build & push Docker images
 
   doctor [runtime]                   Check runtime dependencies
-  install                            Install faas globally
+  install                            Install fnkit globally
   uninstall                          Remove global installation
 
 Runtimes:
   ${CANONICAL_RUNTIMES.join(', ')}
 
 Quick Start:
-  faas node my-api                   Create a function
-  faas deploy setup                  Set up CI/CD pipeline
+  fnkit node my-api                   Create a function
+  fnkit deploy setup                  Set up CI/CD pipeline
   git push                           Deploy to production
 
-Run 'faas <command>' for subcommand details.
+Run 'fnkit <command>' for subcommand details.
 `)
 }
 
 function showContainerHelp() {
   console.log(`
-faas container — Manage deployed containers
+fnkit container — Manage deployed containers
 
 Usage:
-  faas container <command> [options]
+  fnkit container <command> [options]
 
 Commands:
-  ls                    List deployed faas containers
+  ls                    List deployed fnkit containers
   logs <name>           View container logs (live)
   stop <name>           Stop a running container
 
 Options:
-  --all                 Show all containers (not just faas)
+  --all                 Show all containers (not just fnkit)
 
 Examples:
-  faas container ls             List running functions
-  faas container ls --all       Include non-faas containers
-  faas container logs my-api    Tail logs for my-api
-  faas container stop my-api    Stop my-api container
+  fnkit container ls             List running functions
+  fnkit container ls --all       Include non-fnkit containers
+  fnkit container logs my-api    Tail logs for my-api
+  fnkit container stop my-api    Stop my-api container
 `)
 }
 
 function showGatewayHelp() {
   console.log(`
-faas gateway — Manage the API gateway
+fnkit gateway — Manage the API gateway
 
 The gateway provides centralized token authentication and routing
 for all your function containers via nginx.
 
 Usage:
-  faas gateway <command> [options]
+  fnkit gateway <command> [options]
 
 Commands:
   init                  Create gateway project files
@@ -117,25 +117,25 @@ Options:
   --mode <mode>         sequential | parallel
 
 Examples:
-  faas gateway init                    Create gateway project
-  faas gateway build                   Build Docker image
-  faas gateway start --token secret    Start with auth token
-  faas gateway stop                    Stop the gateway
-  faas gateway orchestrate init --s3-bucket pipelines --s3-endpoint http://minio:9000
-  faas gateway orchestrate add process-order --steps validate,charge,notify --mode sequential
-  faas gateway orchestrate ls
+  fnkit gateway init                    Create gateway project
+  fnkit gateway build                   Build Docker image
+  fnkit gateway start --token secret    Start with auth token
+  fnkit gateway stop                    Stop the gateway
+  fnkit gateway orchestrate init --s3-bucket pipelines --s3-endpoint http://minio:9000
+  fnkit gateway orchestrate add process-order --steps validate,charge,notify --mode sequential
+  fnkit gateway orchestrate ls
 `)
 }
 
 function showProxyHelp() {
   console.log(`
-faas proxy — Manage reverse proxy (Caddy)
+fnkit proxy — Manage reverse proxy (Caddy)
 
 Sets up Caddy for automatic HTTPS and domain management.
 Caddy handles TLS certificates via Let's Encrypt automatically.
 
 Usage:
-  faas proxy <command> [options]
+  fnkit proxy <command> [options]
 
 Commands:
   init                  Create Caddy proxy setup
@@ -144,16 +144,16 @@ Commands:
   ls                    List configured domains
 
 Examples:
-  faas proxy init                      Create proxy project
-  faas proxy add api.example.com       Route domain to gateway
-  faas proxy ls                        List all domains
-  faas proxy remove api.example.com    Remove domain route
+  fnkit proxy init                      Create proxy project
+  fnkit proxy add api.example.com       Route domain to gateway
+  fnkit proxy ls                        List all domains
+  fnkit proxy remove api.example.com    Remove domain route
 `)
 }
 
 function showDeployHelp() {
   console.log(`
-faas deploy — Manage CI/CD deploy pipeline
+fnkit deploy — Manage CI/CD deploy pipeline
 
 Automated git-push-to-deploy via Forgejo (default) or GitHub Actions.
 
@@ -161,7 +161,7 @@ Automated git-push-to-deploy via Forgejo (default) or GitHub Actions.
   GitHub:   push → build & push to GHCR → SSH deploy → health check
 
 Usage:
-  faas deploy <command> [options]
+  fnkit deploy <command> [options]
 
 Commands:
   setup                 Guided deploy pipeline setup (recommended)
@@ -173,20 +173,20 @@ Options:
   --provider <name>     Deploy provider: forgejo (default) or github
 
 Examples:
-  faas deploy setup                    Interactive setup wizard
-  faas deploy init                     Generate Forgejo workflow
-  faas deploy init --provider github   Generate GitHub Actions workflow
-  faas deploy runner                   Create runner docker-compose
-  faas deploy status                   Check pipeline & container status
+  fnkit deploy setup                    Interactive setup wizard
+  fnkit deploy init                     Generate Forgejo workflow
+  fnkit deploy init --provider github   Generate GitHub Actions workflow
+  fnkit deploy runner                   Create runner docker-compose
+  fnkit deploy status                   Check pipeline & container status
 `)
 }
 
 function showImageHelp() {
   console.log(`
-faas image — Build & push Docker images
+fnkit image — Build & push Docker images
 
 Usage:
-  faas image <command> [options]
+  fnkit image <command> [options]
 
 Commands:
   build                 Build Docker image for the current function
@@ -198,14 +198,14 @@ Options:
   --target <function>   Function target name
 
 Examples:
-  faas image build                     Build with default tag
-  faas image build --tag myapp:v1      Build with custom tag
-  faas image push --registry ghcr.io   Build and push to registry
+  fnkit image build                     Build with default tag
+  fnkit image build --tag myapp:v1      Build with custom tag
+  fnkit image push --registry ghcr.io   Build and push to registry
 `)
 }
 
 function showVersion() {
-  console.log(`faas v${VERSION}`)
+  console.log(`fnkit v${VERSION}`)
 }
 
 async function main() {
@@ -274,7 +274,7 @@ async function main() {
 
       case 'new':
         if (positionalArgs.length < 2) {
-          logger.error('Usage: faas new <runtime> <name>')
+          logger.error('Usage: fnkit new <runtime> <name>')
           logger.info(`Runtimes: ${CANONICAL_RUNTIMES.join(', ')}`)
           process.exit(1)
         }
@@ -300,7 +300,7 @@ async function main() {
         break
 
       // ─────────────────────────────────────────────────────────────────
-      // Container management: faas container <subcommand>
+      // Container management: fnkit container <subcommand>
       // ─────────────────────────────────────────────────────────────────
 
       case 'container':
@@ -321,7 +321,7 @@ async function main() {
 
           case 'logs':
             if (!positionalArgs[1]) {
-              logger.error('Usage: faas container logs <name>')
+              logger.error('Usage: fnkit container logs <name>')
               process.exit(1)
             }
             const { exec } = await import('./utils/shell')
@@ -335,7 +335,7 @@ async function main() {
 
           case 'stop':
             if (!positionalArgs[1]) {
-              logger.error('Usage: faas container stop <name>')
+              logger.error('Usage: fnkit container stop <name>')
               process.exit(1)
             }
             const { exec: execStop } = await import('./utils/shell')
@@ -359,7 +359,7 @@ async function main() {
         break
 
       // ─────────────────────────────────────────────────────────────────
-      // Gateway management: faas gateway <subcommand>
+      // Gateway management: fnkit gateway <subcommand>
       // ─────────────────────────────────────────────────────────────────
 
       case 'gateway':
@@ -409,7 +409,7 @@ async function main() {
         break
 
       // ─────────────────────────────────────────────────────────────────
-      // Proxy management: faas proxy <subcommand>
+      // Proxy management: fnkit proxy <subcommand>
       // ─────────────────────────────────────────────────────────────────
 
       case 'proxy':
@@ -426,7 +426,7 @@ async function main() {
         break
 
       // ─────────────────────────────────────────────────────────────────
-      // Deploy management: faas deploy <subcommand>
+      // Deploy management: fnkit deploy <subcommand>
       // ─────────────────────────────────────────────────────────────────
 
       case 'deploy':
@@ -443,7 +443,7 @@ async function main() {
         break
 
       // ─────────────────────────────────────────────────────────────────
-      // Image management: faas image <subcommand>
+      // Image management: fnkit image <subcommand>
       // ─────────────────────────────────────────────────────────────────
 
       case 'image':
@@ -501,14 +501,14 @@ async function main() {
         break
 
       // ─────────────────────────────────────────────────────────────────
-      // Shorthand: faas <runtime> <name> → faas new <runtime> <name>
+      // Shorthand: fnkit <runtime> <name> → fnkit new <runtime> <name>
       // ─────────────────────────────────────────────────────────────────
 
       default:
         // Check if command is a canonical runtime name (shorthand for new)
         if (CANONICAL_RUNTIMES.includes(command.toLowerCase())) {
           if (positionalArgs.length < 1) {
-            logger.error(`Usage: faas ${command} <name>`)
+            logger.error(`Usage: fnkit ${command} <name>`)
             process.exit(1)
           }
           const shorthandSuccess = await create(command, positionalArgs[0], {
@@ -517,7 +517,7 @@ async function main() {
           process.exit(shorthandSuccess ? 0 : 1)
         } else {
           logger.error(`Unknown command: ${command}`)
-          logger.info('Run "faas help" for usage information')
+          logger.info('Run "fnkit help" for usage information')
           process.exit(1)
         }
     }

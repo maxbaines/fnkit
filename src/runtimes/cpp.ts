@@ -37,7 +37,7 @@ export const cpp = createRuntime({
 # Recommended: Use 'pack build' with Google Cloud Buildpacks instead
 
 FROM ubuntu:22.04 AS build
-LABEL faas.fn="true"
+LABEL fnkit.fn="true"
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \\
@@ -156,7 +156,7 @@ pack build ${projectName.toLowerCase()} \\
 Or use the CLI:
 
 \`\`\`bash
-faas publish --target hello_world
+fnkit publish --target hello_world
 \`\`\`
 
 ## Deploy

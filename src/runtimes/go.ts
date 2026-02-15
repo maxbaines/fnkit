@@ -15,7 +15,7 @@ export const go = createRuntime({
   filePatterns: ['go.mod', 'go.sum'],
   runCommand: ['go', 'run', './cmd/main.go'],
   dockerfile: `FROM golang:1.21 AS builder
-LABEL faas.fn="true"
+LABEL fnkit.fn="true"
 WORKDIR /app
 COPY go.* ./
 RUN go mod download

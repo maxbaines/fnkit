@@ -1,4 +1,4 @@
-// Global install command - install faas globally
+// Global install command - install fnkit globally
 
 import { resolve } from 'path'
 import logger from '../utils/logger'
@@ -6,11 +6,11 @@ import { exec, execStream } from '../utils/shell'
 
 const isWindows = process.platform === 'win32'
 const INSTALL_PATH = isWindows
-  ? 'C:\\Program Files\\faas\\faas.exe'
-  : '/usr/local/bin/faas'
+  ? 'C:\\Program Files\\fnkit\\fnkit.exe'
+  : '/usr/local/bin/fnkit'
 
 export async function global(): Promise<boolean> {
-  logger.title('Installing FAAS globally')
+  logger.title('Installing FNKIT globally')
 
   // Get the path to the current executable
   const currentExe = process.execPath
@@ -19,7 +19,7 @@ export async function global(): Promise<boolean> {
   if (!currentExe || currentExe.includes('bun')) {
     logger.error('This command must be run from the compiled binary')
     logger.info('First build the binary with: bun run build')
-    logger.info('Then run: ./dist/faas global')
+    logger.info('Then run: ./dist/fnkit global')
     return false
   }
 
@@ -32,7 +32,7 @@ export async function global(): Promise<boolean> {
     try {
       await mkdir(dirname(INSTALL_PATH), { recursive: true })
       await copyFile(currentExe, INSTALL_PATH)
-      logger.info('Add to PATH: C:\\Program Files\\faas')
+      logger.info('Add to PATH: C:\\Program Files\\fnkit')
     } catch (err) {
       logger.error('Failed to install. Try running as Administrator.')
       return false
@@ -62,23 +62,23 @@ export async function global(): Promise<boolean> {
   }
 
   logger.newline()
-  logger.success('FAAS installed globally!')
+  logger.success('FNKIT installed globally!')
   logger.newline()
-  logger.info('You can now run faas from anywhere:')
-  logger.dim('  faas --version')
-  logger.dim('  faas doctor')
-  logger.dim('  faas nodejs hello')
+  logger.info('You can now run fnkit from anywhere:')
+  logger.dim('  fnkit --version')
+  logger.dim('  fnkit doctor')
+  logger.dim('  fnkit nodejs hello')
   logger.newline()
 
   return true
 }
 
 export async function uninstall(): Promise<boolean> {
-  logger.title('Uninstalling FAAS')
+  logger.title('Uninstalling FNKIT')
 
   const { existsSync } = await import('fs')
   if (!existsSync(INSTALL_PATH)) {
-    logger.warn('FAAS is not installed globally')
+    logger.warn('FNKIT is not installed globally')
     return true
   }
 
@@ -109,7 +109,7 @@ export async function uninstall(): Promise<boolean> {
   }
 
   logger.newline()
-  logger.success('FAAS uninstalled!')
+  logger.success('FNKIT uninstalled!')
   logger.newline()
 
   return true

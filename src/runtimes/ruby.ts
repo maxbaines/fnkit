@@ -24,7 +24,7 @@ export const ruby = createRuntime({
   filePatterns: ['Gemfile', 'app.rb'],
   runCommand: ['bundle', 'exec', 'functions-framework-ruby', '--target=hello'],
   dockerfile: `FROM ruby:3.2-slim
-LABEL faas.fn="true"
+LABEL fnkit.fn="true"
 WORKDIR /app
 COPY Gemfile Gemfile.lock ./
 RUN bundle install

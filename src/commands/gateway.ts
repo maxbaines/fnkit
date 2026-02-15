@@ -1,4 +1,4 @@
-// Gateway command - create and manage the FaaS API Gateway
+// Gateway command - create and manage the FnKit API Gateway
 
 import {
   existsSync,
@@ -11,19 +11,19 @@ import { dirname, join, resolve } from 'path'
 import logger from '../utils/logger'
 import * as docker from '../utils/docker'
 
-const GATEWAY_DIR = 'faas-gateway'
-const GATEWAY_IMAGE = 'faas-gateway:latest'
-const GATEWAY_CONTAINER = 'faas-gateway'
-const FAAS_NETWORK = 'faas-network'
+const GATEWAY_DIR = 'fnkit-gateway'
+const GATEWAY_IMAGE = 'fnkit-gateway:latest'
+const GATEWAY_CONTAINER = 'fnkit-gateway'
+const FNKIT_NETWORK = 'fnkit-network'
 const ORCHESTRATOR_DIR = 'orchestrator'
-const ORCHESTRATE_CONFIG = '.faas-orchestrate.json'
+const ORCHESTRATE_CONFIG = '.fnkit-orchestrate.json'
 const DEFAULT_S3_REGION = 'us-east-1'
 
 // Nginx configuration template with token auth and dynamic routing
-// Uses envsubst to inject FAAS_AUTH_TOKEN at container startup
-const NGINX_CONF_TEMPLATE = `# FaaS Gateway - Nginx configuration with token authentication
-# Routes requests to function containers on the faas-network
-# FAAS_AUTH_TOKEN and FAAS_AUTH_ENABLED are injected via envsubst at container startup
+// Uses envsubst to inject FNKIT_AUTH_TOKEN at container startup
+const NGINX_CONF_TEMPLATE = `# FnKit Gateway - Nginx configuration with token authentication
+# Routes requests to function containers on the fnkit-network
+# FNKIT_AUTH_TOKEN and FNKIT_AUTH_ENABLED are injected via envsubst at container startup
 
 worker_processes auto;
 error_log /var/log/nginx/error.log warn;
@@ -50,14 +50,14 @@ http {
     resolver 127.0.0.11 valid=10s ipv6=off;
 
     # Map to validate the Authorization header against the expected token
-    # FAAS_AUTH_TOKEN is substituted by envsubst at startup
+    # FNKIT_AUTH_TOKEN is substituted by envsubst at startup
     map $http_authorization $auth_valid {
         default                         0;
-        "Bearer \${FAAS_AUTH_TOKEN}"    1;
+        "Bearer \${FNKIT_AUTH_TOKEN}"    1;
     }
 
-    # FAAS_AUTH_ENABLED is set to "0" or "1" by start.sh (never empty)
-    map \${FAAS_AUTH_ENABLED} $auth_required {
+    # FNKIT_AUTH_ENABLED is set to "0" or "1" by start.sh (never empty)
+    map \${FNKIT_AUTH_ENABLED} $auth_required {
         default 0;
         "1"     1;
     }
@@ -78,7 +78,7 @@ http {
         # List available info
         location = / {
             default_type application/json;
-            return 200 '{"service": "faas-gateway", "usage": "GET /<container-name>[/path]"}';
+            return 200 '{"service": "fnkit-gateway", "usage": "GET /<container-name>[/path]"}';
         }
 
         # Orchestrate pipelines
@@ -153,7 +153,7 @@ http {
 `
 
 // Dockerfile for the gateway - pure nginx, no Go needed
-const DOCKERFILE = `# FaaS Gateway - Nginx + Bun orchestrator
+const DOCKERFILE = `# FnKit Gateway - Nginx + Bun orchestrator
 FROM oven/bun:alpine AS orchestrator
 
 WORKDIR /app
@@ -163,7 +163,7 @@ COPY orchestrator/index.ts ./index.ts
 
 FROM nginx:alpine
 
-LABEL faas.gateway="true"
+LABEL fnkit.gateway="true"
 
 # Copy bun runtime from builder
 COPY --from=orchestrator /usr/local/bin/bun /usr/local/bin/bun
@@ -181,7 +181,7 @@ RUN chmod +x /start.sh
 EXPOSE 8080
 
 # Default to empty token (open mode) + S3 defaults
-ENV FAAS_AUTH_TOKEN=""
+ENV FNKIT_AUTH_TOKEN=""
 ENV S3_ENDPOINT=""
 ENV S3_BUCKET=""
 ENV S3_REGION="us-east-1"
@@ -196,17 +196,17 @@ const START_SCRIPT = `#!/bin/sh
 set -e
 
 # Compute auth enabled flag (always "0" or "1", never empty)
-if [ -z "$FAAS_AUTH_TOKEN" ]; then
-    export FAAS_AUTH_ENABLED=0
-    echo "FaaS Gateway starting in OPEN mode (no authentication)"
+if [ -z "$FNKIT_AUTH_TOKEN" ]; then
+    export FNKIT_AUTH_ENABLED=0
+    echo "FnKit Gateway starting in OPEN mode (no authentication)"
 else
-    export FAAS_AUTH_ENABLED=1
-    echo "FaaS Gateway starting with token authentication enabled"
+    export FNKIT_AUTH_ENABLED=1
+    echo "FnKit Gateway starting with token authentication enabled"
 fi
 
 # Substitute environment variables into nginx config
 # Only substitute these two to avoid breaking nginx variables like $host, $remote_addr etc.
-envsubst '\${FAAS_AUTH_TOKEN} \${FAAS_AUTH_ENABLED}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
+envsubst '\${FNKIT_AUTH_TOKEN} \${FNKIT_AUTH_ENABLED}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
 
 # Start orchestrator (Bun)
 echo "Starting orchestrator on port 3000"
@@ -222,30 +222,30 @@ const DOCKER_COMPOSE = `version: '3.8'
 services:
   gateway:
     build: .
-    container_name: faas-gateway
+    container_name: fnkit-gateway
     ports:
       - "8080:8080"
     environment:
-      - FAAS_AUTH_TOKEN=\${FAAS_AUTH_TOKEN:-}
+      - FNKIT_AUTH_TOKEN=\${FNKIT_AUTH_TOKEN:-}
       - S3_ENDPOINT=\${S3_ENDPOINT:-}
       - S3_BUCKET=\${S3_BUCKET:-}
       - S3_REGION=\${S3_REGION:-us-east-1}
       - S3_ACCESS_KEY=\${S3_ACCESS_KEY:-}
       - S3_SECRET_KEY=\${S3_SECRET_KEY:-}
     networks:
-      - faas-network
+      - fnkit-network
     restart: unless-stopped
     labels:
-      - faas.gateway=true
+      - fnkit.gateway=true
 
 networks:
-  faas-network:
-    name: faas-network
+  fnkit-network:
+    name: fnkit-network
     external: true
 `
 
 const ORCHESTRATOR_PACKAGE_JSON = `{
-  "name": "faas-orchestrator",
+  "name": "fnkit-orchestrator",
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
@@ -503,37 +503,37 @@ Bun.serve({
   },
 })
 
-console.log('FaaS orchestrator listening on port ' + PORT)
+console.log('FnKit orchestrator listening on port ' + PORT)
 `
 
-const README = `# FaaS Gateway
+const README = `# FnKit Gateway
 
-A lightweight API gateway for your FaaS functions with token authentication.
+A lightweight API gateway for your FnKit functions with token authentication.
 Uses pure nginx - no additional dependencies.
 
 ## Quick Start
 
 \`\`\`bash
 # Create the Docker network
-docker network create faas-network
+docker network create fnkit-network
 
 # Build the gateway
-docker build -t faas-gateway .
+docker build -t fnkit-gateway .
 
 # Run with authentication
 docker run -d \\
-  --name faas-gateway \\
-  --network faas-network \\
+  --name fnkit-gateway \\
+  --network fnkit-network \\
   -p 8080:8080 \\
-  -e FAAS_AUTH_TOKEN=your-secret-token \\
-  faas-gateway
+  -e FNKIT_AUTH_TOKEN=your-secret-token \\
+  fnkit-gateway
 
 # Or run in open mode (no auth)
 docker run -d \\
-  --name faas-gateway \\
-  --network faas-network \\
+  --name fnkit-gateway \\
+  --network fnkit-network \\
   -p 8080:8080 \\
-  faas-gateway
+  fnkit-gateway
 \`\`\`
 
 ## Usage
@@ -556,15 +556,15 @@ curl http://localhost:8080/health
 ## Deploying Functions
 
 Make sure your function containers:
-1. Are on the \`faas-network\` Docker network
+1. Are on the \`fnkit-network\` Docker network
 2. Have a container name matching the URL path
 
 \`\`\`bash
 # Example: Deploy a function named "hello"
 docker run -d \\
   --name hello \\
-  --network faas-network \\
-  --label faas.fn=true \\
+  --network fnkit-network \\
+  --label fnkit.fn=true \\
   my-hello-function:latest
 
 # Call it through the gateway
@@ -575,41 +575,41 @@ curl -H "Authorization: Bearer token" http://localhost:8080/hello
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| \`FAAS_AUTH_TOKEN\` | Bearer token for authentication. If empty, gateway runs in open mode. | (empty) |
+| \`FNKIT_AUTH_TOKEN\` | Bearer token for authentication. If empty, gateway runs in open mode. | (empty) |
 
 ## How It Works
 
 1. Requests come in to \`http://gateway:8080/<container-name>/path\`
-2. If \`FAAS_AUTH_TOKEN\` is set, validates \`Authorization: Bearer <token>\` header
+2. If \`FNKIT_AUTH_TOKEN\` is set, validates \`Authorization: Bearer <token>\` header
 3. Proxies request to \`http://<container-name>:8080/path\` on the Docker network
 4. Returns response from the function container
 
 ## Production Deployment
 
 Deploy the gateway as a Docker container on your server. For HTTPS and domain management,
-use \`faas proxy init\` to set up a Caddy reverse proxy in front of the gateway.
+use \`fnkit proxy init\` to set up a Caddy reverse proxy in front of the gateway.
 
 \`\`\`bash
 # On your server
-docker network create faas-network
-docker build -t faas-gateway .
+docker network create fnkit-network
+docker build -t fnkit-gateway .
 docker run -d \\
-  --name faas-gateway \\
-  --network faas-network \\
+  --name fnkit-gateway \\
+  --network fnkit-network \\
   -p 8080:8080 \\
-  -e FAAS_AUTH_TOKEN=your-secret-token \\
+  -e FNKIT_AUTH_TOKEN=your-secret-token \\
   --restart unless-stopped \\
-  faas-gateway
+  fnkit-gateway
 \`\`\`
 
 Or use docker-compose:
 
 \`\`\`bash
 # Set your token
-export FAAS_AUTH_TOKEN=your-secret-token
+export FNKIT_AUTH_TOKEN=your-secret-token
 
 # Create network and start
-docker network create faas-network
+docker network create fnkit-network
 docker compose up -d
 \`\`\`
 `
@@ -634,7 +634,7 @@ export async function gatewayInit(
   const outputDir = options.output || GATEWAY_DIR
   const targetDir = resolve(process.cwd(), outputDir)
 
-  logger.title('Creating FaaS Gateway')
+  logger.title('Creating FnKit Gateway')
 
   if (existsSync(targetDir)) {
     logger.error(`Directory already exists: ${outputDir}`)
@@ -668,10 +668,10 @@ export async function gatewayInit(
   logger.newline()
   logger.info('Next steps:')
   logger.dim(`  cd ${outputDir}`)
-  logger.dim('  docker network create faas-network')
-  logger.dim('  docker build -t faas-gateway .')
+  logger.dim('  docker network create fnkit-network')
+  logger.dim('  docker build -t fnkit-gateway .')
   logger.dim(
-    '  docker run -d --name faas-gateway --network faas-network -p 8080:8080 -e FAAS_AUTH_TOKEN=secret faas-gateway',
+    '  docker run -d --name fnkit-gateway --network fnkit-network -p 8080:8080 -e FNKIT_AUTH_TOKEN=secret fnkit-gateway',
   )
   logger.newline()
 
@@ -684,11 +684,11 @@ export async function gatewayBuild(
   const gatewayDir = options.output || GATEWAY_DIR
   const targetDir = resolve(process.cwd(), gatewayDir)
 
-  logger.title('Building FaaS Gateway')
+  logger.title('Building FnKit Gateway')
 
   if (!existsSync(targetDir)) {
     logger.error(`Gateway directory not found: ${gatewayDir}`)
-    logger.info('Run "faas gateway init" first to create the gateway')
+    logger.info('Run "fnkit gateway init" first to create the gateway')
     return false
   }
 
@@ -711,9 +711,9 @@ export async function gatewayBuild(
     logger.success(`Built: ${GATEWAY_IMAGE}`)
     logger.newline()
     logger.info('Run the gateway:')
-    logger.dim(`  docker network create ${FAAS_NETWORK} 2>/dev/null || true`)
+    logger.dim(`  docker network create ${FNKIT_NETWORK} 2>/dev/null || true`)
     logger.dim(
-      `  docker run -d --name ${GATEWAY_CONTAINER} --network ${FAAS_NETWORK} -p 8080:8080 -e FAAS_AUTH_TOKEN=your-token ${GATEWAY_IMAGE}`,
+      `  docker run -d --name ${GATEWAY_CONTAINER} --network ${FNKIT_NETWORK} -p 8080:8080 -e FNKIT_AUTH_TOKEN=your-token ${GATEWAY_IMAGE}`,
     )
   }
 
@@ -723,7 +723,7 @@ export async function gatewayBuild(
 export async function gatewayStart(
   options: GatewayOptions = {},
 ): Promise<boolean> {
-  logger.title('Starting FaaS Gateway')
+  logger.title('Starting FnKit Gateway')
 
   // Check Docker
   if (
@@ -737,13 +737,13 @@ export async function gatewayStart(
   // Check if image exists
   if (!(await docker.imageExists(GATEWAY_IMAGE))) {
     logger.error(`Gateway image not found: ${GATEWAY_IMAGE}`)
-    logger.info('Run "faas gateway build" first')
+    logger.info('Run "fnkit gateway build" first')
     return false
   }
 
   // Create network if needed
   const { exec } = await import('../utils/shell')
-  await exec('docker', ['network', 'create', FAAS_NETWORK])
+  await exec('docker', ['network', 'create', FNKIT_NETWORK])
 
   // Stop existing container if running
   await exec('docker', ['rm', '-f', GATEWAY_CONTAINER])
@@ -755,17 +755,17 @@ export async function gatewayStart(
     '--name',
     GATEWAY_CONTAINER,
     '--network',
-    FAAS_NETWORK,
+    FNKIT_NETWORK,
     '-p',
     '8080:8080',
     '--label',
-    'faas.gateway=true',
+    'fnkit.gateway=true',
     '--restart',
     'unless-stopped',
   ]
 
   if (options.token) {
-    args.push('-e', `FAAS_AUTH_TOKEN=${options.token}`)
+    args.push('-e', `FNKIT_AUTH_TOKEN=${options.token}`)
   }
 
   if (options.bucket) {
@@ -807,7 +807,7 @@ export async function gatewayStart(
 }
 
 export async function gatewayStop(): Promise<boolean> {
-  logger.title('Stopping FaaS Gateway')
+  logger.title('Stopping FnKit Gateway')
 
   const { exec } = await import('../utils/shell')
   const result = await exec('docker', ['rm', '-f', GATEWAY_CONTAINER])
@@ -854,7 +854,7 @@ function loadOrchestrateConfig(
   if (!merged.bucket) {
     logger.error('S3 bucket not configured for orchestrations')
     logger.info(
-      `Run: faas gateway orchestrate init --bucket <bucket> [--endpoint <url>]`,
+      `Run: fnkit gateway orchestrate init --bucket <bucket> [--endpoint <url>]`,
     )
     return null
   }
@@ -906,7 +906,7 @@ export async function orchestrateInit(
   logger.title('Initializing orchestrations config')
 
   if (!options.bucket) {
-    logger.error('Usage: faas gateway orchestrate init --bucket <bucket>')
+    logger.error('Usage: fnkit gateway orchestrate init --bucket <bucket>')
     return false
   }
 
@@ -935,7 +935,7 @@ export async function orchestrateAdd(
 ): Promise<boolean> {
   if (!name) {
     logger.error(
-      'Usage: faas gateway orchestrate add <name> --steps a,b,c --mode sequential',
+      'Usage: fnkit gateway orchestrate add <name> --steps a,b,c --mode sequential',
     )
     return false
   }
@@ -962,7 +962,7 @@ export async function orchestrateAdd(
   }
 
   const pipeline = { mode, steps }
-  const tempFile = resolve(process.cwd(), `.faas-orchestrate-${name}.json`)
+  const tempFile = resolve(process.cwd(), `.fnkit-orchestrate-${name}.json`)
 
   try {
     writeFileSync(tempFile, JSON.stringify(pipeline, null, 2))
@@ -994,7 +994,7 @@ export async function orchestrateAdd(
 export async function orchestrateList(
   options: GatewayOptions = {},
 ): Promise<boolean> {
-  logger.title('FaaS Orchestrations')
+  logger.title('FnKit Orchestrations')
 
   const config = loadOrchestrateConfig(options)
   if (!config) {
@@ -1023,7 +1023,7 @@ export async function orchestrateList(
     logger.info('No pipelines found in the bucket')
     logger.newline()
     logger.dim(
-      '  Add one: faas gateway orchestrate add <name> --steps a,b --mode sequential',
+      '  Add one: fnkit gateway orchestrate add <name> --steps a,b --mode sequential',
     )
     logger.newline()
     return true
@@ -1047,7 +1047,7 @@ export async function orchestrateRemove(
   options: GatewayOptions = {},
 ): Promise<boolean> {
   if (!name) {
-    logger.error('Usage: faas gateway orchestrate remove <name>')
+    logger.error('Usage: fnkit gateway orchestrate remove <name>')
     return false
   }
 

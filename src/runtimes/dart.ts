@@ -15,7 +15,7 @@ export const dart = createRuntime({
   filePatterns: ['pubspec.yaml'],
   runCommand: ['dart', 'run', 'bin/server.dart'],
   dockerfile: `FROM dart:stable AS build
-LABEL faas.fn="true"
+LABEL fnkit.fn="true"
 WORKDIR /app
 COPY pubspec.* ./
 RUN dart pub get

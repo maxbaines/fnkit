@@ -5,26 +5,26 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs'
 import { join, resolve } from 'path'
 import logger from '../utils/logger'
 
-const PROXY_DIR = 'faas-proxy'
+const PROXY_DIR = 'fnkit-proxy'
 
-const CADDYFILE = `# FaaS Proxy — Caddy reverse proxy with automatic HTTPS
-# Manages TLS certificates and routes domains to the faas-gateway
+const CADDYFILE = `# FnKit Proxy — Caddy reverse proxy with automatic HTTPS
+# Manages TLS certificates and routes domains to the fnkit-gateway
 #
 # Add domain routes below. Each entry maps a domain to the gateway.
 # Caddy automatically provisions and renews TLS certificates via Let's Encrypt.
 #
 # Usage:
-#   faas proxy add <domain>              — Add a domain route
-#   Or manually edit this file and reload: docker exec faas-proxy caddy reload --config /etc/caddy/Caddyfile
+#   fnkit proxy add <domain>              — Add a domain route
+#   Or manually edit this file and reload: docker exec fnkit-proxy caddy reload --config /etc/caddy/Caddyfile
 
-# Example: route a domain to the faas-gateway
+# Example: route a domain to the fnkit-gateway
 # api.example.com {
-#     reverse_proxy faas-gateway:8080
+#     reverse_proxy fnkit-gateway:8080
 # }
 `
 
-const PROXY_DOCKER_COMPOSE = `# FaaS Proxy — Caddy for automatic HTTPS and domain routing
-# Routes external domains to the faas-gateway with automatic TLS
+const PROXY_DOCKER_COMPOSE = `# FnKit Proxy — Caddy for automatic HTTPS and domain routing
+# Routes external domains to the fnkit-gateway with automatic TLS
 #
 # Setup:
 #   1. Edit Caddyfile to add your domain routes
@@ -34,7 +34,7 @@ const PROXY_DOCKER_COMPOSE = `# FaaS Proxy — Caddy for automatic HTTPS and dom
 services:
   caddy:
     image: caddy:2-alpine
-    container_name: faas-proxy
+    container_name: fnkit-proxy
     restart: unless-stopped
     ports:
       - "80:80"
@@ -45,36 +45,36 @@ services:
       - caddy-data:/data
       - caddy-config:/config
     networks:
-      - faas-network
+      - fnkit-network
     labels:
-      - faas.proxy=true
+      - fnkit.proxy=true
 
 volumes:
   caddy-data:
   caddy-config:
 
 networks:
-  faas-network:
-    name: faas-network
+  fnkit-network:
+    name: fnkit-network
     external: true
 `
 
-const PROXY_README = `# FaaS Proxy
+const PROXY_README = `# FnKit Proxy
 
-Caddy-based reverse proxy with automatic HTTPS for your FaaS platform.
+Caddy-based reverse proxy with automatic HTTPS for your FnKit platform.
 Handles TLS certificate provisioning and domain routing — no external platform needed.
 
 ## Architecture
 
 \`\`\`
-Internet → Caddy (TLS/domains, ports 80/443) → faas-gateway (auth, port 8080) → Function containers
+Internet → Caddy (TLS/domains, ports 80/443) → fnkit-gateway (auth, port 8080) → Function containers
 \`\`\`
 
 ## Quick Start
 
 \`\`\`bash
-# Make sure faas-network exists and gateway is running
-docker network create faas-network 2>/dev/null || true
+# Make sure fnkit-network exists and gateway is running
+docker network create fnkit-network 2>/dev/null || true
 
 # Start the proxy
 docker compose up -d
@@ -82,11 +82,11 @@ docker compose up -d
 # Add a domain route
 # Edit Caddyfile and add:
 #   api.example.com {
-#       reverse_proxy faas-gateway:8080
+#       reverse_proxy fnkit-gateway:8080
 #   }
 
 # Reload Caddy to pick up changes
-docker exec faas-proxy caddy reload --config /etc/caddy/Caddyfile
+docker exec fnkit-proxy caddy reload --config /etc/caddy/Caddyfile
 \`\`\`
 
 ## Adding Domains
@@ -94,7 +94,7 @@ docker exec faas-proxy caddy reload --config /etc/caddy/Caddyfile
 ### Option 1: Use the CLI
 
 \`\`\`bash
-faas proxy add api.example.com
+fnkit proxy add api.example.com
 \`\`\`
 
 ### Option 2: Edit Caddyfile manually
@@ -103,18 +103,18 @@ Add a block for each domain:
 
 \`\`\`caddy
 api.example.com {
-    reverse_proxy faas-gateway:8080
+    reverse_proxy fnkit-gateway:8080
 }
 
 docs.example.com {
-    reverse_proxy faas-gateway:8080
+    reverse_proxy fnkit-gateway:8080
 }
 \`\`\`
 
 Then reload:
 
 \`\`\`bash
-docker exec faas-proxy caddy reload --config /etc/caddy/Caddyfile
+docker exec fnkit-proxy caddy reload --config /etc/caddy/Caddyfile
 \`\`\`
 
 ## DNS Setup
@@ -127,7 +127,7 @@ Caddy automatically provisions TLS certificates via Let's Encrypt once DNS is po
 1. **Caddy** listens on ports 80 and 443
 2. Incoming requests are matched by domain name
 3. Caddy terminates TLS (auto-provisioned via Let's Encrypt / ZeroSSL)
-4. Request is proxied to \`faas-gateway:8080\` on the Docker network
+4. Request is proxied to \`fnkit-gateway:8080\` on the Docker network
 5. The gateway handles authentication and routes to the correct function container
 
 ## Notes
@@ -147,7 +147,7 @@ export async function proxyInit(options: ProxyOptions = {}): Promise<boolean> {
   const outputDir = options.output || PROXY_DIR
   const targetDir = resolve(process.cwd(), outputDir)
 
-  logger.title('Creating FaaS Proxy (Caddy)')
+  logger.title('Creating FnKit Proxy (Caddy)')
 
   if (existsSync(targetDir)) {
     logger.error(`Directory already exists: ${outputDir}`)
@@ -186,11 +186,11 @@ export async function proxyInit(options: ProxyOptions = {}): Promise<boolean> {
   console.log('')
   console.log('   1. Ensure the gateway is running:')
   console.log(
-    '      faas gateway init && faas gateway build && faas gateway start',
+    '      fnkit gateway init && fnkit gateway build && fnkit gateway start',
   )
   console.log('')
   console.log('   2. Add a domain route:')
-  console.log(`      faas proxy add api.example.com`)
+  console.log(`      fnkit proxy add api.example.com`)
   console.log('      (or edit Caddyfile manually)')
   console.log('')
   console.log('   3. Start the proxy:')
@@ -217,7 +217,7 @@ export async function proxyAdd(
 
   if (!existsSync(caddyfilePath)) {
     logger.error(`Caddyfile not found at ${proxyDir}/Caddyfile`)
-    logger.info('Run "faas proxy init" first to create the proxy')
+    logger.info('Run "fnkit proxy init" first to create the proxy')
     return false
   }
 
@@ -233,16 +233,16 @@ export async function proxyAdd(
   // Append new domain block
   const domainBlock = `
 ${domain} {
-    reverse_proxy faas-gateway:8080
+    reverse_proxy fnkit-gateway:8080
 }
 `
 
   writeFileSync(caddyfilePath, currentContent + domainBlock)
-  logger.success(`Added ${domain} → faas-gateway:8080`)
+  logger.success(`Added ${domain} → fnkit-gateway:8080`)
   logger.newline()
   logger.info('Reload the proxy to apply:')
   logger.dim(
-    '  docker exec faas-proxy caddy reload --config /etc/caddy/Caddyfile',
+    '  docker exec fnkit-proxy caddy reload --config /etc/caddy/Caddyfile',
   )
   logger.newline()
   logger.info('Make sure DNS for this domain points to your server.')
@@ -284,7 +284,7 @@ export async function proxyRemove(
   logger.newline()
   logger.info('Reload the proxy to apply:')
   logger.dim(
-    '  docker exec faas-proxy caddy reload --config /etc/caddy/Caddyfile',
+    '  docker exec fnkit-proxy caddy reload --config /etc/caddy/Caddyfile',
   )
   logger.newline()
 
@@ -295,11 +295,11 @@ export async function proxyList(options: ProxyOptions = {}): Promise<boolean> {
   const proxyDir = options.output || PROXY_DIR
   const caddyfilePath = resolve(process.cwd(), proxyDir, 'Caddyfile')
 
-  logger.title('FaaS Proxy Domains')
+  logger.title('FnKit Proxy Domains')
 
   if (!existsSync(caddyfilePath)) {
     logger.error(`Caddyfile not found at ${proxyDir}/Caddyfile`)
-    logger.info('Run "faas proxy init" first to create the proxy')
+    logger.info('Run "fnkit proxy init" first to create the proxy')
     return false
   }
 
@@ -317,14 +317,14 @@ export async function proxyList(options: ProxyOptions = {}): Promise<boolean> {
   if (domains.length === 0) {
     logger.info('No domains configured')
     logger.newline()
-    logger.dim('  Add a domain: faas proxy add api.example.com')
+    logger.dim('  Add a domain: fnkit proxy add api.example.com')
     logger.newline()
     return true
   }
 
   console.log('')
   for (const domain of domains) {
-    console.log(`   🌐 ${domain} → faas-gateway:8080`)
+    console.log(`   🌐 ${domain} → fnkit-gateway:8080`)
   }
   console.log('')
   logger.info(
@@ -344,14 +344,14 @@ export async function proxy(
       return proxyInit(options)
     case 'add':
       if (!options.domain) {
-        logger.error('Usage: faas proxy add <domain>')
+        logger.error('Usage: fnkit proxy add <domain>')
         return false
       }
       return proxyAdd(options.domain, options)
     case 'remove':
     case 'rm':
       if (!options.domain) {
-        logger.error('Usage: faas proxy remove <domain>')
+        logger.error('Usage: fnkit proxy remove <domain>')
         return false
       }
       return proxyRemove(options.domain, options)
@@ -362,10 +362,10 @@ export async function proxy(
       logger.error(`Unknown proxy command: ${subcommand}`)
       logger.info('Available commands: init, add, remove, ls')
       logger.newline()
-      logger.dim('  faas proxy init                — Create Caddy proxy setup')
-      logger.dim('  faas proxy add <domain>        — Add domain route')
-      logger.dim('  faas proxy remove <domain>     — Remove domain route')
-      logger.dim('  faas proxy ls                  — List configured domains')
+      logger.dim('  fnkit proxy init                — Create Caddy proxy setup')
+      logger.dim('  fnkit proxy add <domain>        — Add domain route')
+      logger.dim('  fnkit proxy remove <domain>     — Remove domain route')
+      logger.dim('  fnkit proxy ls                  — List configured domains')
       return false
   }
 }

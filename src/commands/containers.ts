@@ -1,4 +1,4 @@
-// List deployed faas containers
+// List deployed fnkit containers
 
 import {
   isDockerAvailable,
@@ -9,7 +9,7 @@ import {
 import logger from '../utils/logger'
 
 export interface ContainersOptions {
-  all?: boolean // Show all containers, not just faas.fn labeled ones
+  all?: boolean // Show all containers, not just fnkit.fn labeled ones
 }
 
 export async function containers(
@@ -30,25 +30,25 @@ export async function containers(
     '╔════════════════════════════════════════════════════════════════╗',
   )
   console.log(
-    '║                    🐳 FAAS Containers                        ║',
+    '║                    🐳 FNKIT Containers                       ║',
   )
   console.log(
     '╚════════════════════════════════════════════════════════════════╝',
   )
   console.log('')
 
-  // Get containers - filter by faas.fn label unless --all is specified
-  const labelFilter = options.all ? undefined : 'faas.fn=true'
+  // Get containers - filter by fnkit.fn label unless --all is specified
+  const labelFilter = options.all ? undefined : 'fnkit.fn=true'
   const containerList = await listContainers(labelFilter)
 
   if (containerList.length === 0) {
     if (options.all) {
       console.log('   No containers found.')
     } else {
-      console.log('   No faas containers found.')
+      console.log('   No fnkit containers found.')
       console.log('')
       console.log(
-        '   Containers must have the label faas.fn=true to appear here.',
+        '   Containers must have the label fnkit.fn=true to appear here.',
       )
       console.log('   Use --all to show all containers.')
     }
@@ -88,8 +88,8 @@ export async function containers(
 
   // Commands hint
   console.log('   Commands:')
-  console.log('   - Logs:    faas container logs <name>')
-  console.log('   - Stop:    faas container stop <name>')
+  console.log('   - Logs:    fnkit container logs <name>')
+  console.log('   - Stop:    fnkit container stop <name>')
   console.log('   - Shell:   docker exec -it <name> sh')
   console.log('   - Remove:  docker rm <name>')
   console.log('')
