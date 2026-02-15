@@ -13,6 +13,9 @@ import { dotnet } from './dotnet'
 import { php } from './php'
 import { dart } from './dart'
 import { cpp } from './cpp'
+import { nodejsMqtt } from './nodejs-mqtt'
+import { goMqtt } from './go-mqtt'
+import { dotnetMqtt } from './dotnet-mqtt'
 
 // Canonical runtime names only - no aliases
 export const runtimes: Record<string, Runtime> = {
@@ -25,6 +28,9 @@ export const runtimes: Record<string, Runtime> = {
   php,
   dart,
   cpp,
+  'node-mqtt': nodejsMqtt,
+  'go-mqtt': goMqtt,
+  'dotnet-mqtt': dotnetMqtt,
 }
 
 export function getRuntime(name: string): Runtime | undefined {

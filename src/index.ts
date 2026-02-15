@@ -26,6 +26,9 @@ const CANONICAL_RUNTIMES = [
   'php',
   'dart',
   'cpp',
+  'node-mqtt',
+  'go-mqtt',
+  'dotnet-mqtt',
 ]
 
 function showHelp() {

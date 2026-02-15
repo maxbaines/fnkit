@@ -1,6 +1,6 @@
-# FNKIT CLI
+# Fnkit Function Kit CLI
 
-A command-line tool for scaffolding and deploying serverless functions using the [Google Cloud Functions Framework](https://github.com/GoogleCloudPlatform/functions-framework). Git push to deploy — no external platforms required.
+A command-line tool for scaffolding and deploying serverless functions using the [Google Cloud Functions Framework](https://github.com/GoogleCloudPlatform/functions-framework).Using docker and Git push to deploy — no external platforms required.
 
 ## Architecture
 

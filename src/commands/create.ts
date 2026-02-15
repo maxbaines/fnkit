@@ -89,9 +89,12 @@ export async function create(
   const gitignore = generateGitignore(runtime.name)
   await writeFile(join(targetDir, '.gitignore'), gitignore)
 
-  // Create docker-compose.yml for gateway integration
+  // Create docker-compose.yml for gateway/broker integration
   logger.step('Creating docker-compose.yml...')
-  const dockerCompose = generateDockerCompose(projectName)
+  const isMqtt = runtime.name.endsWith('-mqtt')
+  const dockerCompose = isMqtt
+    ? generateMqttDockerCompose(projectName)
+    : generateDockerCompose(projectName)
   await writeFile(join(targetDir, 'docker-compose.yml'), dockerCompose)
 
   // Run post-create commands (e.g., npm install)
@@ -205,6 +208,21 @@ build/
 *.o
 *.a
 `,
+    'nodejs-mqtt': `# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+.env
+`,
+    'go-mqtt': `# Go
+vendor/
+*.exe
+`,
+    'dotnet-mqtt': `# .NET
+bin/
+obj/
+*.user
+`,
   }
 
   return common + (runtimeSpecific[runtimeName] || '')
@@ -247,6 +265,73 @@ networks:
 # Usage:
 #   docker-compose up -d
 #   curl -H "Authorization: Bearer <token>" http://localhost:8080/${projectName}
+`
+}
+
+function generateMqttDockerCompose(projectName: string): string {
+  return `# Docker Compose for FnKit MQTT function
+# Requires: docker network create fnkit-network
+# Requires: an MQTT broker (Mosquitto included below)
+
+version: '3.8'
+
+services:
+  ${projectName}:
+    build: .
+    container_name: ${projectName}
+    environment:
+      # MQTT broker connection
+      - MQTT_BROKER=mqtt://mosquitto:1883
+      # Function target name
+      - FUNCTION_TARGET=helloWorld
+      # Topic prefix (subscribes to {prefix}/{target})
+      - MQTT_TOPIC_PREFIX=fnkit
+      # MQTT QoS level (0, 1, or 2)
+      - MQTT_QOS=1
+      # MQTT client identifier (auto-generated if empty)
+      - MQTT_CLIENT_ID=
+      # MQTT broker authentication
+      - MQTT_USERNAME=
+      - MQTT_PASSWORD=
+      # TLS: path to CA certificate
+      - MQTT_CA=
+      # mTLS: path to client certificate and key
+      - MQTT_CERT=
+      - MQTT_KEY=
+      # Whether to reject unauthorized TLS certificates
+      - MQTT_REJECT_UNAUTHORIZED=true
+    networks:
+      - fnkit-network
+    depends_on:
+      mosquitto:
+        condition: service_started
+    restart: unless-stopped
+
+  # MQTT broker — uncomment to include in this compose file
+  # mosquitto:
+  #   image: eclipse-mosquitto:2
+  #   container_name: mosquitto
+  #   ports:
+  #     - "1883:1883"
+  #   volumes:
+  #     - mosquitto-data:/mosquitto/data
+  #     - mosquitto-log:/mosquitto/log
+  #   networks:
+  #     - fnkit-network
+  #   restart: unless-stopped
+
+networks:
+  fnkit-network:
+    name: fnkit-network
+    external: true
+
+# volumes:
+#   mosquitto-data:
+#   mosquitto-log:
+
+# Usage:
+#   docker-compose up -d
+#   Publish to topic: fnkit/${projectName}
 `
 }
 
