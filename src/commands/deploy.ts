@@ -185,6 +185,7 @@ jobs:
             --label fnkit.fn=true \\
             --label fnkit.deployed="\$(date -u +%Y-%m-%dT%H:%M:%SZ)" \\
             --restart unless-stopped \\
+            -e CACHE_URL=redis://fnkit-cache:6379 \\
             \$IMAGE_NAME
 
       - name: Health check
@@ -304,6 +305,7 @@ jobs:
               --label fnkit.fn=true \\
               --label fnkit.deployed="\$(date -u +%Y-%m-%dT%H:%M:%SZ)" \\
               --restart unless-stopped \\
+              -e CACHE_URL=redis://fnkit-cache:6379 \\
               \$IMAGE
 
             # Health check

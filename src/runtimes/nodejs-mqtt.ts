@@ -43,6 +43,8 @@ ENV MQTT_CERT=
 ENV MQTT_KEY=
 # Whether to reject unauthorized TLS certificates
 ENV MQTT_REJECT_UNAUTHORIZED=true
+# Shared cache (Valkey/Redis) — available to all functions on fnkit-network
+ENV CACHE_URL=redis://fnkit-cache:6379
 
 CMD ["npm", "start"]
 `,
@@ -64,6 +66,20 @@ CMD ["npm", "start"]
         2,
       ),
       'index.js': `const fnkit = require('@functionkit/functions-framework');
+
+// ── Shared cache (Valkey/Redis) ──────────────────────────────────────
+// Uncomment to use the shared cache across all functions.
+// Install: npm install ioredis
+//
+// const Redis = require('ioredis');
+// const cache = new Redis(process.env.CACHE_URL || 'redis://fnkit-cache:6379');
+//
+// // Write to cache (with 5-minute TTL)
+// await cache.set('mykey', JSON.stringify({ hello: 'world' }), 'EX', 300);
+//
+// // Read from cache
+// const value = JSON.parse(await cache.get('mykey'));
+// ─────────────────────────────────────────────────────────────────────
 
 fnkit.mqtt('helloWorld', (req, res) => {
   const name = req.body?.name || 'World';

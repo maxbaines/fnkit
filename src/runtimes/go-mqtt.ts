@@ -42,6 +42,8 @@ ENV MQTT_CERT=
 ENV MQTT_KEY=
 # Whether to reject unauthorized TLS certificates
 ENV MQTT_REJECT_UNAUTHORIZED=true
+# Shared cache (Valkey/Redis) — available to all functions on fnkit-network
+ENV CACHE_URL=redis://fnkit-cache:6379
 
 CMD ["/server"]
 `,
@@ -60,6 +62,25 @@ import (
 
 \t"github.com/functionkit/function-framework-go/functions"
 )
+
+// ── Shared cache (Valkey/Redis) ──────────────────────────────────────
+// Uncomment to use the shared cache across all functions.
+// Install: go get github.com/redis/go-redis/v9
+//
+// import (
+// \t"context"
+// \t"time"
+// \t"github.com/redis/go-redis/v9"
+// )
+//
+// var cache = redis.NewClient(&redis.Options{Addr: "fnkit-cache:6379"})
+//
+// // Write to cache (with 5-minute TTL)
+// cache.Set(context.Background(), "mykey", "value", 5*time.Minute)
+//
+// // Read from cache
+// val, _ := cache.Get(context.Background(), "mykey").Result()
+// ─────────────────────────────────────────────────────────────────────
 
 func init() {
 \tfunctions.MQTT("helloWorld", helloWorld)

@@ -31,6 +31,8 @@ COPY pom.xml .
 RUN mvn dependency:go-offline
 COPY src ./src
 RUN mvn package -DskipTests
+# Shared cache (Valkey/Redis) — available to all functions on fnkit-network
+ENV CACHE_URL=redis://fnkit-cache:6379
 EXPOSE 8080
 CMD ["mvn", "function:run", "-Drun.port=8080"]
 
@@ -81,6 +83,21 @@ CMD ["mvn", "function:run", "-Drun.port=8080"]
 import com.google.cloud.functions.HttpFunction;
 import com.google.cloud.functions.HttpRequest;
 import com.google.cloud.functions.HttpResponse;
+
+// ── Shared cache (Valkey/Redis) ──────────────────────────────────────
+// Uncomment to use the shared cache across all functions.
+// Add to pom.xml: <dependency><groupId>redis.clients</groupId><artifactId>jedis</artifactId><version>5.1.0</version></dependency>
+//
+// import redis.clients.jedis.Jedis;
+//
+// Jedis cache = new Jedis("fnkit-cache", 6379);
+//
+// // Write to cache (with 5-minute TTL)
+// cache.setex("mykey", 300, "{\\"hello\\": \\"world\\"}");
+//
+// // Read from cache
+// String value = cache.get("mykey");
+// ─────────────────────────────────────────────────────────────────────
 
 public class HelloWorld implements HttpFunction {
   @Override

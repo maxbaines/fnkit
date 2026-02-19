@@ -107,6 +107,33 @@ fnkit container logs my-api      # Tail logs (live)
 fnkit container stop my-api      # Stop a container
 ```
 
+### Shared Cache — `fnkit cache`
+
+A Redis-compatible shared cache (powered by [Valkey](https://valkey.io/)) accessible by all function containers. Sub-millisecond reads/writes with TTL support and persistent storage.
+
+```bash
+fnkit cache init               # Create cache project files
+fnkit cache start              # Start Valkey container on fnkit-network
+fnkit cache stop               # Stop the cache
+```
+
+**How it works:**
+
+All function containers on `fnkit-network` can connect to the cache at `redis://fnkit-cache:6379`. Every generated function template includes a commented-out cache example — just uncomment and install the client library for your language.
+
+```bash
+# Functions connect using standard Redis clients
+# CACHE_URL=redis://fnkit-cache:6379 is set automatically in Dockerfiles
+
+# Node.js: npm install ioredis
+# Python:  pip install redis
+# Go:      go get github.com/redis/go-redis/v9
+# Java:    add jedis to pom.xml
+# Ruby:    gem install redis
+# .NET:    dotnet add package StackExchange.Redis
+# PHP:     composer require predis/predis
+```
+
 ### API Gateway — `fnkit gateway`
 
 Centralized token authentication and routing for all function containers via nginx, with a built-in Bun-based orchestrator for multi-function pipelines.
@@ -307,6 +334,10 @@ Run `fnkit <command>` with no subcommand to see detailed help for any group.
 | `fnkit container ls`                      | List deployed containers          |
 | `fnkit container logs <name>`             | View container logs               |
 | `fnkit container stop <name>`             | Stop a container                  |
+| **Cache**                                 |                                   |
+| `fnkit cache init`                        | Create cache project (Valkey)     |
+| `fnkit cache start`                       | Start the cache container         |
+| `fnkit cache stop`                        | Stop the cache container          |
 | **Gateway**                               |                                   |
 | `fnkit gateway init`                      | Create gateway project            |
 | `fnkit gateway build`                     | Build gateway image               |
@@ -380,6 +411,7 @@ fnkit/
 │   │   ├── run.ts            # Local dev server
 │   │   ├── publish.ts        # Docker build & push
 │   │   ├── containers.ts     # Container management
+│   │   ├── cache.ts          # Shared cache (Valkey)
 │   │   ├── gateway.ts        # API gateway management
 │   │   ├── proxy.ts          # Caddy proxy management
 │   │   ├── deploy.ts         # CI/CD pipelines (Forgejo/GitHub)

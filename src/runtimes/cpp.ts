@@ -71,6 +71,8 @@ RUN cmake --build .build
 FROM gcr.io/distroless/cc-debian12
 COPY --from=build /app/.build/hello_world /hello_world
 ENV PORT=8080
+# Shared cache (Valkey/Redis) — available to all functions on fnkit-network
+ENV CACHE_URL=redis://fnkit-cache:6379
 EXPOSE 8080
 CMD ["/hello_world"]
 `,
@@ -90,6 +92,21 @@ target_link_libraries(hello_world functions-framework-cpp::framework)
       'hello_world.cc': `#include <google/cloud/functions/function.h>
 
 namespace gcf = ::google::cloud::functions;
+
+// ── Shared cache (Valkey/Redis) ──────────────────────────────────────
+// Uncomment to use the shared cache across all functions.
+// Add to vcpkg.json: "redis-plus-plus" and "hiredis"
+//
+// #include <sw/redis++/redis++.h>
+//
+// auto cache = sw::redis::Redis("tcp://fnkit-cache:6379");
+//
+// // Write to cache (with 5-minute TTL)
+// cache.set("mykey", R"({"hello": "world"})", std::chrono::seconds(300));
+//
+// // Read from cache
+// auto value = cache.get("mykey");  // returns std::optional<std::string>
+// ─────────────────────────────────────────────────────────────────────
 
 // HTTP function handler
 gcf::HttpResponse hello_world_impl(gcf::HttpRequest const& /*request*/) {

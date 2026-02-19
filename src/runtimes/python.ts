@@ -22,6 +22,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
+# Shared cache (Valkey/Redis) — available to all functions on fnkit-network
+ENV CACHE_URL=redis://fnkit-cache:6379
 CMD ["functions-framework", "--target=hello", "--port=8080"]
 `,
   template: (projectName: string) => ({
@@ -30,6 +32,21 @@ CMD ["functions-framework", "--target=hello", "--port=8080"]
 `,
       'main.py': `import flask
 import functions_framework
+
+# ── Shared cache (Valkey/Redis) ──────────────────────────────────────
+# Uncomment to use the shared cache across all functions.
+# Install: pip install redis
+#
+# import os, redis
+# cache = redis.from_url(os.environ.get('CACHE_URL', 'redis://fnkit-cache:6379'))
+#
+# # Write to cache (with 5-minute TTL)
+# cache.set('mykey', '{"hello": "world"}', ex=300)
+#
+# # Read from cache
+# import json
+# value = json.loads(cache.get('mykey'))
+# ─────────────────────────────────────────────────────────────────────
 
 
 @functions_framework.http

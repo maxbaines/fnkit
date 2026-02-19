@@ -26,6 +26,8 @@ RUN dotnet publish -c Release -o /app
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=build /app .
+# Shared cache (Valkey/Redis) — available to all functions on fnkit-network
+ENV CACHE_URL=redis://fnkit-cache:6379
 ENTRYPOINT ["dotnet", "{{PROJECT_NAME}}.dll"]
 `,
   template: (projectName: string) => {
@@ -46,6 +48,22 @@ ENTRYPOINT ["dotnet", "{{PROJECT_NAME}}.dll"]
         'Function.cs': `using Google.Cloud.Functions.Framework;
 using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
+
+// ── Shared cache (Valkey/Redis) ──────────────────────────────────────
+// Uncomment to use the shared cache across all functions.
+// Install: dotnet add package StackExchange.Redis
+//
+// using StackExchange.Redis;
+//
+// var redis = ConnectionMultiplexer.Connect("fnkit-cache:6379");
+// var db = redis.GetDatabase();
+//
+// // Write to cache (with 5-minute TTL)
+// db.StringSet("mykey", "{\\"hello\\": \\"world\\"}", TimeSpan.FromMinutes(5));
+//
+// // Read from cache
+// string value = db.StringGet("mykey");
+// ─────────────────────────────────────────────────────────────────────
 
 namespace ${safeNamespace};
 

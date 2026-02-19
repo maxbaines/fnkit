@@ -37,6 +37,8 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 RUN composer install --no-dev
 COPY . .
 ENV FUNCTION_TARGET=helloHttp
+# Shared cache (Valkey/Redis) — available to all functions on fnkit-network
+ENV CACHE_URL=redis://fnkit-cache:6379
 CMD ["php", "-S", "0.0.0.0:8080", "vendor/google/cloud-functions-framework/router.php"]
 `,
   template: (projectName: string) => ({
@@ -54,6 +56,20 @@ CMD ["php", "-S", "0.0.0.0:8080", "vendor/google/cloud-functions-framework/route
       'index.php': `<?php
 
 use Psr\\Http\\Message\\ServerRequestInterface;
+
+// ── Shared cache (Valkey/Redis) ──────────────────────────────────────
+// Uncomment to use the shared cache across all functions.
+// Install: composer require predis/predis
+//
+// require 'vendor/autoload.php';
+// $cache = new Predis\\Client(getenv('CACHE_URL') ?: 'redis://fnkit-cache:6379');
+//
+// // Write to cache (with 5-minute TTL)
+// $cache->setex('mykey', 300, json_encode(['hello' => 'world']));
+//
+// // Read from cache
+// $value = json_decode($cache->get('mykey'), true);
+// ─────────────────────────────────────────────────────────────────────
 
 function helloHttp(ServerRequestInterface $request): string
 {

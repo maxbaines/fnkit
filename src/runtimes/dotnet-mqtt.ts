@@ -47,6 +47,8 @@ ENV MQTT_CERT=
 ENV MQTT_KEY=
 # Whether to reject unauthorized TLS certificates
 ENV MQTT_REJECT_UNAUTHORIZED=true
+# Shared cache (Valkey/Redis) — available to all functions on fnkit-network
+ENV CACHE_URL=redis://fnkit-cache:6379
 
 ENTRYPOINT ["dotnet", "{{PROJECT_NAME}}.dll"]
 `,
@@ -70,9 +72,25 @@ ENTRYPOINT ["dotnet", "{{PROJECT_NAME}}.dll"]
 `,
         'Function.cs': `using FnKit.Functions.Framework;
 
+// ── Shared cache (Valkey/Redis) ──────────────────────────────────────
+// Uncomment to use the shared cache across all functions.
+// Install: dotnet add package StackExchange.Redis
+//
+// using StackExchange.Redis;
+//
+// var redis = ConnectionMultiplexer.Connect("fnkit-cache:6379");
+// var db = redis.GetDatabase();
+//
+// // Write to cache (with 5-minute TTL)
+// db.StringSet("mykey", "{\\"hello\\": \\"world\\"}", TimeSpan.FromMinutes(5));
+//
+// // Read from cache
+// string value = db.StringGet("mykey");
+// ─────────────────────────────────────────────────────────────────────
+
 namespace ${safeNamespace};
 
-public class HelloWorld : IMqttFunction
+public class Function : IMqttFunction
 {
     public Task HandleAsync(MqttRequest request, MqttResponse response, CancellationToken cancellationToken)
     {

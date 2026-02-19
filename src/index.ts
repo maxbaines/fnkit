@@ -11,6 +11,7 @@ import { containers } from './commands/containers'
 import { gateway } from './commands/gateway'
 import { deploy } from './commands/deploy'
 import { proxy } from './commands/proxy'
+import { cache } from './commands/cache'
 import logger from './utils/logger'
 
 const VERSION = '0.7.3'
@@ -46,6 +47,7 @@ Commands:
 
   container ...                      Manage deployed containers
   gateway ...                        Manage API gateway
+  cache ...                          Manage shared cache (Valkey)
   proxy ...                          Manage reverse proxy (Caddy)
   deploy ...                         Manage CI/CD deploy pipeline
   image ...                          Build & push Docker images
@@ -409,6 +411,45 @@ async function main() {
 
         const gatewaySuccess = await gateway(gatewaySubcmd, gatewayOptions)
         process.exit(gatewaySuccess ? 0 : 1)
+        break
+
+      // ─────────────────────────────────────────────────────────────────
+      // Cache management: fnkit cache <subcommand>
+      // ─────────────────────────────────────────────────────────────────
+
+      case 'cache':
+        const cacheSubcmd = positionalArgs[0]
+        if (!cacheSubcmd || options.help || options.h) {
+          console.log(`
+fnkit cache — Manage shared cache (Valkey)
+
+A Redis-compatible shared cache accessible by all function containers.
+Powered by Valkey (open-source, BSD licensed).
+
+Usage:
+  fnkit cache <command> [options]
+
+Commands:
+  init                  Create cache project files
+  start                 Start the cache container
+  stop                  Stop the cache container
+
+Options:
+  --maxmemory <size>    Max memory (default: 256mb)
+
+Examples:
+  fnkit cache init                      Create cache project
+  fnkit cache start                     Start cache (Valkey)
+  fnkit cache start --maxmemory 512mb   Start with custom memory limit
+  fnkit cache stop                      Stop the cache
+`)
+          process.exit(0)
+        }
+        const cacheSuccess = await cache(cacheSubcmd, {
+          output: options.output as string,
+          maxmemory: options.maxmemory as string,
+        })
+        process.exit(cacheSuccess ? 0 : 1)
         break
 
       // ─────────────────────────────────────────────────────────────────

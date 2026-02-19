@@ -29,6 +29,8 @@ WORKDIR /app
 COPY Gemfile Gemfile.lock ./
 RUN bundle install
 COPY . .
+# Shared cache (Valkey/Redis) — available to all functions on fnkit-network
+ENV CACHE_URL=redis://fnkit-cache:6379
 CMD ["bundle", "exec", "functions-framework-ruby", "--target=hello"]
 `,
   template: (projectName: string) => ({
@@ -38,6 +40,20 @@ CMD ["bundle", "exec", "functions-framework-ruby", "--target=hello"]
 gem "functions_framework", "~> 1.0"
 `,
       'app.rb': `require "functions_framework"
+
+# ── Shared cache (Valkey/Redis) ──────────────────────────────────────
+# Uncomment to use the shared cache across all functions.
+# Add to Gemfile: gem "redis", "~> 5.0"
+#
+# require "redis"
+# cache = Redis.new(url: ENV.fetch("CACHE_URL", "redis://fnkit-cache:6379"))
+#
+# # Write to cache (with 5-minute TTL)
+# cache.set("mykey", '{"hello": "world"}', ex: 300)
+#
+# # Read from cache
+# value = cache.get("mykey")
+# ─────────────────────────────────────────────────────────────────────
 
 FunctionsFramework.http("hello") do |request|
   "Hello, World!\\n"

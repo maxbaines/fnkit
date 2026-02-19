@@ -23,6 +23,8 @@ RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/main.go
 FROM gcr.io/distroless/static-debian11
 COPY --from=builder /app/server /server
 ENV FUNCTION_TARGET=HelloWorld
+# Shared cache (Valkey/Redis) — available to all functions on fnkit-network
+ENV CACHE_URL=redis://fnkit-cache:6379
 EXPOSE 8080
 CMD ["/server"]
 `,
@@ -42,6 +44,25 @@ import (
 
 	"github.com/GoogleCloudPlatform/functions-framework-go/functions"
 )
+
+// ── Shared cache (Valkey/Redis) ──────────────────────────────────────
+// Uncomment to use the shared cache across all functions.
+// Install: go get github.com/redis/go-redis/v9
+//
+// import (
+// 	"context"
+// 	"time"
+// 	"github.com/redis/go-redis/v9"
+// )
+//
+// var cache = redis.NewClient(&redis.Options{Addr: "fnkit-cache:6379"})
+//
+// // Write to cache (with 5-minute TTL)
+// cache.Set(context.Background(), "mykey", "value", 5*time.Minute)
+//
+// // Read from cache
+// val, _ := cache.Get(context.Background(), "mykey").Result()
+// ─────────────────────────────────────────────────────────────────────
 
 func init() {
 	functions.HTTP("HelloWorld", helloWorld)

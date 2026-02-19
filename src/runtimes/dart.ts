@@ -26,6 +26,8 @@ RUN dart compile exe bin/server.dart -o bin/server
 FROM scratch
 COPY --from=build /runtime/ /
 COPY --from=build /app/bin/server /app/bin/server
+# Shared cache (Valkey/Redis) — available to all functions on fnkit-network
+ENV CACHE_URL=redis://fnkit-cache:6379
 CMD ["/app/bin/server"]
 `,
   template: (projectName: string) => {
@@ -49,6 +51,24 @@ dev_dependencies:
 `,
         'lib/functions.dart': `import 'package:functions_framework/functions_framework.dart';
 import 'package:shelf/shelf.dart';
+
+// ── Shared cache (Valkey/Redis) ──────────────────────────────────────
+// Uncomment to use the shared cache across all functions.
+// Add to pubspec.yaml: resp_client: ^1.0.0
+//
+// import 'dart:io';
+// import 'package:resp_client/resp_client.dart';
+// import 'package:resp_client/resp_commands.dart';
+//
+// final conn = await connectSocket('fnkit-cache', port: 6379);
+// final client = RespCommandsTier2(RespClient(conn));
+//
+// // Write to cache (with 5-minute TTL)
+// await client.set('mykey', '{"hello": "world"}', seconds: 300);
+//
+// // Read from cache
+// final value = await client.get('mykey');
+// ─────────────────────────────────────────────────────────────────────
 
 @CloudFunction()
 Response function(Request request) => Response.ok('Hello, World!');
