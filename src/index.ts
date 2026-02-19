@@ -14,7 +14,7 @@ import { proxy } from './commands/proxy'
 import { cache } from './commands/cache'
 import logger from './utils/logger'
 
-const VERSION = '0.7.4'
+const VERSION = '0.7.5'
 
 // Canonical runtime names only
 const CANONICAL_RUNTIMES = [
