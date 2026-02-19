@@ -336,42 +336,20 @@ Run `fnkit <command>` with no subcommand to see detailed help for any group.
 
 ---
 
-## Server Setup Checklist
+## Production Deployment
 
-Setting up a fresh server to run FnKit:
+For a complete step-by-step guide to deploying FnKit on a bare Ubuntu server — including Forgejo, Actions runner, Caddy TLS proxy, and the API gateway — see **[deploy.md](deploy.md)**.
 
-```bash
-# 1. Install Docker
-curl -fsSL https://get.docker.com | sh
+The guide covers:
 
-# 2. Create the Docker network
-docker network create fnkit-network
-
-# 3. Set up the gateway
-fnkit gateway init
-cd fnkit-gateway
-fnkit gateway build
-fnkit gateway start --token your-secret-token
-cd ..
-
-# 4. Set up the reverse proxy (for HTTPS/domains)
-fnkit proxy init
-fnkit proxy add api.example.com
-cd fnkit-proxy
-docker compose up -d
-cd ..
-
-# 5. Set up the Forgejo runner (for CI/CD)
-fnkit deploy runner
-cd fnkit-runner
-cp .env.example .env
-# Edit .env with your Forgejo URL and runner token
-docker compose up -d
-cd ..
-
-# ✅ Server is ready!
-# Now create functions, push to git, and they deploy automatically.
-```
+- Server hardening (firewall, swap)
+- Docker + fnkit-network setup
+- API gateway with token authentication
+- Self-hosted Forgejo (git + CI/CD)
+- Automatic HTTPS via Caddy + Let's Encrypt
+- Forgejo Actions runner for git-push-to-deploy
+- Deploying functions in all 9 supported runtimes
+- Troubleshooting common build issues
 
 ## Development
 

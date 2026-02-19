@@ -30,7 +30,7 @@ COPY --from=build /app .
 # MQTT broker connection
 ENV MQTT_BROKER=mqtt://localhost:1883
 # Function target name
-ENV FUNCTION_TARGET={{ENTRYPOINT}}
+ENV FUNCTION_TARGET=HelloWorld
 # Topic prefix (subscribes to {prefix}/{target})
 ENV MQTT_TOPIC_PREFIX=fnkit
 # MQTT QoS level (0, 1, or 2)
@@ -72,7 +72,7 @@ ENTRYPOINT ["dotnet", "{{PROJECT_NAME}}.dll"]
 
 namespace ${safeNamespace};
 
-public class Function : IMqttFunction
+public class HelloWorld : IMqttFunction
 {
     public Task HandleAsync(MqttRequest request, MqttResponse response, CancellationToken cancellationToken)
     {
@@ -99,13 +99,13 @@ public class Function : IMqttFunction
 `,
         'Program.cs': `using FnKit.Functions.Hosting;
 
-return await EntryPoint.StartAsync(typeof(${safeNamespace}.Function).Assembly, args);
+return await EntryPoint.StartAsync(typeof(${safeNamespace}.HelloWorld).Assembly, args);
 `,
         '.env.example': `# MQTT broker connection
 MQTT_BROKER=mqtt://localhost:1883
 
 # Function target name
-FUNCTION_TARGET=Function
+FUNCTION_TARGET=HelloWorld
 
 # Topic prefix (subscribes to {prefix}/{target})
 MQTT_TOPIC_PREFIX=fnkit

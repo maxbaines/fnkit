@@ -31,6 +31,7 @@ export const php = createRuntime({
   dockerfile: `FROM php:8.2-cli
 LABEL fnkit.fn="true"
 WORKDIR /app
+RUN apt-get update && apt-get install -y git unzip zip && rm -rf /var/lib/apt/lists/*
 COPY composer.json composer.lock ./
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 RUN composer install --no-dev

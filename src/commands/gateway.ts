@@ -37,6 +37,9 @@ http {
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
 
+    # Increase hash bucket size for long map strings (e.g. Bearer token)
+    map_hash_bucket_size 128;
+
     log_format main '$remote_addr - $remote_user [$time_local] "$request" '
                     '$status $body_bytes_sent "$http_referer" '
                     '"$http_user_agent"';
@@ -346,8 +349,11 @@ async function callFunction(
   body: string,
   contentType: string,
 ): Promise<Response> {
+  // Always use POST when there is a body (even if original request was GET)
+  // Bun fetch() does not allow body with GET/HEAD/OPTIONS
+  const effectiveMethod = body.length ? 'POST' : method
   return await fetch('http://' + step + ':8080' + path + query, {
-    method,
+    method: effectiveMethod,
     headers: {
       'content-type': contentType,
       accept: 'application/json',
@@ -458,7 +464,7 @@ Bun.serve({
       return jsonResponse({ error: 'Not found' }, 404)
     }
 
-    const match = url.pathname.match(/^\/orchestrate\/([^/]+)(.*)$/)
+    const match = url.pathname.match(/^\\/orchestrate\\/([^\\/]+)(.*)$/)
     if (!match) {
       return jsonResponse({ error: 'Pipeline name missing' }, 400)
     }
