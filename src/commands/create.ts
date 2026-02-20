@@ -300,6 +300,8 @@ services:
       - MQTT_KEY=
       # Whether to reject unauthorized TLS certificates
       - MQTT_REJECT_UNAUTHORIZED=true
+      # Override subscribe topic (e.g. "v1.0/#" for wildcard). If empty, uses {prefix}/{target}
+      - MQTT_SUBSCRIBE_TOPIC=
     networks:
       - fnkit-network
     depends_on:

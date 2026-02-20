@@ -42,6 +42,8 @@ ENV MQTT_CERT=
 ENV MQTT_KEY=
 # Whether to reject unauthorized TLS certificates
 ENV MQTT_REJECT_UNAUTHORIZED=true
+# Override subscribe topic (e.g. "v1.0/#" for wildcard). If empty, uses {prefix}/{target}
+ENV MQTT_SUBSCRIBE_TOPIC=
 # Shared cache (Valkey/Redis) — available to all functions on fnkit-network
 ENV CACHE_URL=redis://fnkit-cache:6379
 
@@ -143,6 +145,9 @@ MQTT_KEY=
 
 # Whether to reject unauthorized TLS certificates
 MQTT_REJECT_UNAUTHORIZED=true
+
+# Override subscribe topic (e.g. "v1.0/#" for wildcard). If empty, uses {prefix}/{target}
+MQTT_SUBSCRIBE_TOPIC=
 `,
     },
     postCreate: ['go mod tidy'],

@@ -33,27 +33,27 @@ git add . && git commit -m "init" && git push
 
 ### From Binary
 
-Download the pre-built binary for your platform from the [releases page](https://github.com/maxbaines/fnkit/releases).
+Download the pre-built binary for your platform from the [releases page](https://github.com/functionkit/fnkit/releases).
 
 ```bash
 # macOS (Apple Silicon)
-curl -L https://github.com/maxbaines/fnkit/releases/latest/download/fnkit-macos-arm64 -o fnkit
+curl -L https://github.com/functionkit/fnkit/releases/latest/download/fnkit-macos-arm64 -o fnkit
 chmod +x fnkit && ./fnkit install
 
 # macOS (Intel)
-curl -L https://github.com/maxbaines/fnkit/releases/latest/download/fnkit-macos-x64 -o fnkit
+curl -L https://github.com/functionkit/fnkit/releases/latest/download/fnkit-macos-x64 -o fnkit
 chmod +x fnkit && ./fnkit install
 
 # Linux (x64)
-curl -L https://github.com/maxbaines/fnkit/releases/latest/download/fnkit-linux-x64 -o fnkit
+curl -L https://github.com/functionkit/fnkit/releases/latest/download/fnkit-linux-x64 -o fnkit
 chmod +x fnkit && ./fnkit install
 
 # Linux (ARM64)
-curl -L https://github.com/maxbaines/fnkit/releases/latest/download/fnkit-linux-arm64 -o fnkit
+curl -L https://github.com/functionkit/fnkit/releases/latest/download/fnkit-linux-arm64 -o fnkit
 chmod +x fnkit && ./fnkit install
 
 # Windows (PowerShell as Administrator)
-Invoke-WebRequest -Uri https://github.com/maxbaines/fnkit/releases/latest/download/fnkit-windows-x64.exe -OutFile fnkit.exe
+Invoke-WebRequest -Uri https://github.com/functionkit/fnkit/releases/latest/download/fnkit-windows-x64.exe -OutFile fnkit.exe
 .\fnkit.exe install
 ```
 
@@ -62,7 +62,7 @@ Invoke-WebRequest -Uri https://github.com/maxbaines/fnkit/releases/latest/downlo
 Requires [Bun](https://bun.sh) to be installed.
 
 ```bash
-git clone https://github.com/maxbaines/fnkit.git
+git clone https://github.com/functionkit/fnkit.git
 cd fnkit
 bun install
 bun run build
@@ -305,6 +305,8 @@ fnkit uninstall                  # Remove global installation
 
 ## Supported Runtimes
 
+### HTTP (Google Cloud Functions Framework)
+
 | Runtime | Command  | Framework                                                                                       |
 | ------- | -------- | ----------------------------------------------------------------------------------------------- |
 | Node.js | `node`   | [functions-framework-nodejs](https://github.com/GoogleCloudPlatform/functions-framework-nodejs) |
@@ -316,6 +318,39 @@ fnkit uninstall                  # Remove global installation
 | PHP     | `php`    | [functions-framework-php](https://github.com/GoogleCloudPlatform/functions-framework-php)       |
 | Dart    | `dart`   | [functions-framework-dart](https://github.com/GoogleCloudPlatform/functions-framework-dart)     |
 | C++     | `cpp`    | [functions-framework-cpp](https://github.com/GoogleCloudPlatform/functions-framework-cpp)       |
+
+### MQTT (FnKit Function Framework)
+
+Event-driven functions that subscribe to MQTT topics instead of listening on HTTP. Each function connects to an MQTT broker, subscribes to `{prefix}/{target}`, and processes messages as they arrive.
+
+| Runtime | Command       | Framework                                                                             |
+| ------- | ------------- | ------------------------------------------------------------------------------------- |
+| Node.js | `node-mqtt`   | [function-framework-nodejs](https://github.com/functionkit/function-framework-nodejs) |
+| Go      | `go-mqtt`     | [function-framework-go](https://github.com/functionkit/function-framework-go)         |
+| .NET    | `dotnet-mqtt` | [function-framework-dotnet](https://github.com/functionkit/function-framework-dotnet) |
+
+```bash
+# Create an MQTT function
+fnkit node-mqtt my-handler
+fnkit go-mqtt my-handler
+fnkit dotnet-mqtt my-handler
+```
+
+MQTT functions are configured via environment variables:
+
+| Variable                   | Description                                 | Default                 |
+| -------------------------- | ------------------------------------------- | ----------------------- |
+| `MQTT_BROKER`              | Broker connection URL                       | `mqtt://localhost:1883` |
+| `FUNCTION_TARGET`          | Function name to invoke                     | —                       |
+| `MQTT_TOPIC_PREFIX`        | Topic prefix (`{prefix}/{target}`)          | `fnkit`                 |
+| `MQTT_QOS`                 | QoS level (0, 1, or 2)                      | `1`                     |
+| `MQTT_CLIENT_ID`           | Client identifier (auto-generated if empty) | —                       |
+| `MQTT_USERNAME`            | Broker authentication username              | —                       |
+| `MQTT_PASSWORD`            | Broker authentication password              | —                       |
+| `MQTT_CA`                  | Path to CA certificate (TLS)                | —                       |
+| `MQTT_CERT`                | Path to client certificate (mTLS)           | —                       |
+| `MQTT_KEY`                 | Path to client key (mTLS)                   | —                       |
+| `MQTT_REJECT_UNAUTHORIZED` | Reject unauthorized TLS certificates        | `true`                  |
 
 ---
 
