@@ -12,6 +12,7 @@ import { gateway } from './commands/gateway'
 import { deploy } from './commands/deploy'
 import { proxy } from './commands/proxy'
 import { cache } from './commands/cache'
+import { s3 } from './commands/s3'
 import logger from './utils/logger'
 
 const VERSION = '0.7.5'
@@ -48,6 +49,7 @@ Commands:
   container ...                      Manage deployed containers
   gateway ...                        Manage API gateway
   cache ...                          Manage shared cache (Valkey)
+  s3 ...                             Manage S3/MinIO object storage
   proxy ...                          Manage reverse proxy (Caddy)
   deploy ...                         Manage CI/CD deploy pipeline
   image ...                          Build & push Docker images
@@ -450,6 +452,58 @@ Examples:
           maxmemory: options.maxmemory as string,
         })
         process.exit(cacheSuccess ? 0 : 1)
+        break
+
+      // ─────────────────────────────────────────────────────────────────
+      // S3 management: fnkit s3 <subcommand>
+      // ─────────────────────────────────────────────────────────────────
+
+      case 's3':
+        const s3Subcmd = positionalArgs[0]
+        if (!s3Subcmd || options.help || options.h) {
+          console.log(`
+fnkit s3 — Manage S3/MinIO object storage
+
+Store and manage config files, pipeline definitions, and other objects
+in S3-compatible storage (AWS S3, MinIO, Garage, etc.).
+
+Usage:
+  fnkit s3 <command> [options]
+
+Commands:
+  init                              Save S3 connection config
+  mb <bucket-name>                  Create a new bucket
+  ls [prefix]                       List objects in bucket
+  upload <local-file> [s3-key]      Upload a file
+  download <s3-key> [local-file]    Download a file
+  rm <s3-key>                       Delete a file
+
+Options:
+  --bucket <bucket>       S3 bucket name
+  --endpoint <url>        S3-compatible endpoint (MinIO/Garage)
+  --region <region>       S3 region (default: us-east-1)
+  --s3-access-key <key>   S3 access key
+  --s3-secret-key <key>   S3 secret key
+
+Examples:
+  fnkit s3 init --bucket fnkit-config --endpoint http://minio:9000
+  fnkit s3 mb fnkit-config
+  fnkit s3 upload pglog-line1.json pglog-line1.json
+  fnkit s3 ls
+  fnkit s3 download pglog-line1.json
+  fnkit s3 rm pglog-line1.json
+`)
+          process.exit(0)
+        }
+        const s3CmdOptions = {
+          bucket: (options['s3-bucket'] as string) || (options.bucket as string),
+          endpoint: (options['s3-endpoint'] as string) || (options.endpoint as string),
+          region: (options['s3-region'] as string) || (options.region as string),
+          accessKey: (options['s3-access-key'] as string) || (options['access-key'] as string),
+          secretKey: (options['s3-secret-key'] as string) || (options['secret-key'] as string),
+        }
+        const s3Success = await s3(s3Subcmd, positionalArgs.slice(1), s3CmdOptions)
+        process.exit(s3Success ? 0 : 1)
         break
 
       // ─────────────────────────────────────────────────────────────────
