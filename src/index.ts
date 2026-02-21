@@ -15,7 +15,7 @@ import { cache } from './commands/cache'
 import { s3 } from './commands/s3'
 import logger from './utils/logger'
 
-const VERSION = '0.7.5'
+const VERSION = '0.7.6'
 
 // Canonical runtime names only
 const CANONICAL_RUNTIMES = [
